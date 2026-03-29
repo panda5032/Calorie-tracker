@@ -72,15 +72,18 @@ function updateDashboard() {
     const totalProtein = entries.reduce((s, e) => s + (e.protein || 0), 0);
     const totalCarbs = entries.reduce((s, e) => s + (e.carbs || 0), 0);
     const totalFat = entries.reduce((s, e) => s + (e.fat || 0), 0);
-    const totalBurned = exercises.reduce((s, e) => s + (e.caloriesBurned || 0), 0);
+    const exerciseBurned = exercises.reduce((s, e) => s + (e.caloriesBurned || 0), 0);
     const totalExMinutes = exercises.reduce((s, e) => s + (e.duration || 0), 0);
+    const todaysSteps = Storage.getTodaysSteps();
+    const stepCalories = calcStepCalories(todaysSteps, profile.weightLbs);
+    const totalBurned = exerciseBurned + stepCalories;
     const netCalories = totalCal - totalBurned;
     const remaining = calc.dailyTarget - totalCal + totalBurned;
 
     // Exercise dashboard card
     document.getElementById('dash-burned').textContent = totalBurned.toLocaleString();
     document.getElementById('dash-net').textContent = netCalories.toLocaleString();
-    document.getElementById('dash-ex-minutes').textContent = totalExMinutes;
+    document.getElementById('dash-steps').textContent = todaysSteps.toLocaleString();
 
     // Ring
     const progress = Math.min(totalCal / calc.dailyTarget, 1.0);
@@ -619,10 +622,15 @@ function loadExerciseEntries() {
     const dateStr = document.getElementById('exercise-date').value;
     const exercises = Storage.getExercisesForDate(dateStr);
 
-    const totalBurned = exercises.reduce((s, e) => s + (e.caloriesBurned || 0), 0);
+    const exerciseBurned = exercises.reduce((s, e) => s + (e.caloriesBurned || 0), 0);
     const totalDuration = exercises.reduce((s, e) => s + (e.duration || 0), 0);
+    const steps = Storage.getStepsForDate(dateStr);
+    const profile = Storage.getProfile();
+    const stepCal = calcStepCalories(steps, profile.weightLbs);
+    const totalBurned = exerciseBurned + stepCal;
 
     document.getElementById('ex-total-burned').textContent = totalBurned.toLocaleString();
+    loadStepsForDate(dateStr);
     document.getElementById('ex-total-duration').textContent = totalDuration;
     document.getElementById('ex-total-count').textContent = exercises.length;
 
@@ -672,6 +680,48 @@ function changeExerciseDate(delta) {
     d.setDate(d.getDate() + delta);
     input.value = d.toISOString().split('T')[0];
     loadExerciseEntries();
+}
+
+// ============================================================
+// Steps
+// ============================================================
+function calcStepCalories(steps, weightLbs) {
+    // ~0.04 cal/step for 155lb person, adjusted by weight
+    return Math.round(steps * 0.04 * (weightLbs / 155));
+}
+
+function updateStepCalories() {
+    const steps = parseInt(document.getElementById('steps-input').value) || 0;
+    const profile = Storage.getProfile();
+    const cal = calcStepCalories(steps, profile.weightLbs);
+    document.getElementById('steps-calories').textContent = cal.toLocaleString();
+
+    const goal = 10000;
+    const pct = Math.min(100, (steps / goal) * 100);
+    document.getElementById('steps-progress-bar').style.width = pct + '%';
+    document.getElementById('steps-goal-label').textContent = steps.toLocaleString() + ' / ' + goal.toLocaleString();
+}
+
+function saveSteps() {
+    const dateStr = document.getElementById('exercise-date').value;
+    const steps = parseInt(document.getElementById('steps-input').value) || 0;
+    Storage.saveStepsForDate(dateStr, steps);
+    loadExerciseEntries();
+    updateDashboard();
+    showToast('Steps saved!');
+}
+
+function loadStepsForDate(dateStr) {
+    const steps = Storage.getStepsForDate(dateStr);
+    document.getElementById('steps-input').value = steps || '';
+    const profile = Storage.getProfile();
+    const cal = calcStepCalories(steps, profile.weightLbs);
+    document.getElementById('steps-calories').textContent = cal.toLocaleString();
+
+    const goal = 10000;
+    const pct = Math.min(100, (steps / goal) * 100);
+    document.getElementById('steps-progress-bar').style.width = pct + '%';
+    document.getElementById('steps-goal-label').textContent = (steps || 0).toLocaleString() + ' / ' + goal.toLocaleString();
 }
 
 // ============================================================

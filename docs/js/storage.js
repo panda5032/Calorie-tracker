@@ -2,6 +2,7 @@ const Storage = {
     PROFILE_KEY: 'ct_profile',
     ENTRIES_KEY: 'ct_entries',
     EXERCISES_KEY: 'ct_exercises',
+    STEPS_KEY: 'ct_steps',
 
     getDefaultProfile() {
         const goalDate = new Date();
@@ -98,6 +99,27 @@ const Storage = {
         let exercises = this.getAllExercises();
         exercises = exercises.filter(e => e.id !== id);
         localStorage.setItem(this.EXERCISES_KEY, JSON.stringify(exercises));
+    },
+
+    // Steps methods
+    getAllSteps() {
+        const data = localStorage.getItem(this.STEPS_KEY);
+        return data ? JSON.parse(data) : {};
+    },
+
+    getStepsForDate(dateStr) {
+        const steps = this.getAllSteps();
+        return steps[dateStr] || 0;
+    },
+
+    getTodaysSteps() {
+        return this.getStepsForDate(this.todayStr());
+    },
+
+    saveStepsForDate(dateStr, count) {
+        const steps = this.getAllSteps();
+        steps[dateStr] = count;
+        localStorage.setItem(this.STEPS_KEY, JSON.stringify(steps));
     },
 
     todayStr() {

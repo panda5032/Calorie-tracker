@@ -81,9 +81,9 @@
                             <span class="exercise-dash-label">Net Cal</span>
                         </div>
                         <div class="exercise-dash-item">
-                            <span class="exercise-dash-icon">&#x23F1;&#xFE0F;</span>
-                            <span class="exercise-dash-value" id="dash-ex-minutes">0</span>
-                            <span class="exercise-dash-label">Minutes</span>
+                            <span class="exercise-dash-icon">&#x1F6B6;</span>
+                            <span class="exercise-dash-value" id="dash-steps">0</span>
+                            <span class="exercise-dash-label">Steps</span>
                         </div>
                     </div>
                 </div>
@@ -198,6 +198,30 @@
                         <span class="stat-label">Workouts</span>
                         <span class="stat-value" id="ex-total-count">0</span>
                         <span class="stat-unit">&nbsp;</span>
+                    </div>
+                </div>
+
+                <div class="card steps-card">
+                    <div class="steps-header">
+                        <span class="steps-icon">&#x1F6B6;</span>
+                        <h3>Steps</h3>
+                    </div>
+                    <div class="steps-input-row">
+                        <input type="number" id="steps-input" class="steps-input" placeholder="0" min="0" oninput="updateStepCalories()">
+                        <span class="steps-label">steps</span>
+                    </div>
+                    <div class="steps-info-row">
+                        <div class="steps-cal">
+                            <span class="steps-cal-value" id="steps-calories">0</span>
+                            <span class="steps-cal-unit">cal burned</span>
+                        </div>
+                        <button class="btn btn-primary steps-save-btn" onclick="saveSteps()">Save</button>
+                    </div>
+                    <div class="steps-progress-row">
+                        <div class="steps-progress-bar-bg">
+                            <div class="steps-progress-bar" id="steps-progress-bar"></div>
+                        </div>
+                        <span class="steps-goal-label" id="steps-goal-label">0 / 10,000</span>
                     </div>
                 </div>
 
