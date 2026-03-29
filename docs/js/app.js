@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
 function initApp() {
     // Set default date for log
     document.getElementById('log-date').value = Storage.todayStr();
+    document.getElementById('exercise-date').value = Storage.todayStr();
 
     // Set goal date default
     const profile = Storage.getProfile();
@@ -22,9 +23,13 @@ function initApp() {
     // Load profile into form
     loadProfileForm(profile);
 
+    // Init category chips
+    initCategoryChips();
+
     // Update all views
     updateDashboard();
     loadLogEntries();
+    loadExerciseEntries();
     recalcProfile();
 
     // Register service worker
@@ -50,6 +55,7 @@ function switchTab(tab) {
     // Refresh data
     if (tab === 'dashboard') updateDashboard();
     if (tab === 'log') loadLogEntries();
+    if (tab === 'exercise') loadExerciseEntries();
     if (tab === 'profile') recalcProfile();
 }
 
@@ -60,12 +66,21 @@ function updateDashboard() {
     const profile = Storage.getProfile();
     const calc = CalorieCalculator.computeAll(profile);
     const entries = Storage.getTodaysEntries();
+    const exercises = Storage.getTodaysExercises();
 
     const totalCal = entries.reduce((s, e) => s + (e.calories || 0), 0);
     const totalProtein = entries.reduce((s, e) => s + (e.protein || 0), 0);
     const totalCarbs = entries.reduce((s, e) => s + (e.carbs || 0), 0);
     const totalFat = entries.reduce((s, e) => s + (e.fat || 0), 0);
-    const remaining = calc.dailyTarget - totalCal;
+    const totalBurned = exercises.reduce((s, e) => s + (e.caloriesBurned || 0), 0);
+    const totalExMinutes = exercises.reduce((s, e) => s + (e.duration || 0), 0);
+    const netCalories = totalCal - totalBurned;
+    const remaining = calc.dailyTarget - totalCal + totalBurned;
+
+    // Exercise dashboard card
+    document.getElementById('dash-burned').textContent = totalBurned.toLocaleString();
+    document.getElementById('dash-net').textContent = netCalories.toLocaleString();
+    document.getElementById('dash-ex-minutes').textContent = totalExMinutes;
 
     // Ring
     const progress = Math.min(totalCal / calc.dailyTarget, 1.0);
@@ -460,6 +475,192 @@ function saveProfile() {
     recalcProfile();
     updateDashboard();
     showToast('Profile saved!');
+}
+
+// ============================================================
+// Exercise
+// ============================================================
+let selectedExerciseData = null;
+
+function initCategoryChips() {
+    const container = document.getElementById('category-chips');
+    container.innerHTML = ExerciseDatabase.categories.map(cat =>
+        `<button class="category-chip" onclick="selectCategory('${cat}')">
+            ${ExerciseDatabase.getCategoryEmoji(cat)} ${cat}
+        </button>`
+    ).join('');
+}
+
+function showAddExercise() {
+    document.getElementById('exercise-modal').style.display = 'flex';
+    document.getElementById('exercise-search').value = '';
+    document.getElementById('exercise-search-results').innerHTML = '';
+    document.getElementById('category-exercises').innerHTML = '';
+    document.getElementById('exercise-details').style.display = 'none';
+    document.getElementById('exercise-save-btn').disabled = true;
+    selectedExerciseData = null;
+    // Reset active chips
+    document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+}
+
+function closeAddExercise() {
+    document.getElementById('exercise-modal').style.display = 'none';
+}
+
+function searchExercise(query) {
+    const results = ExerciseDatabase.search(query);
+    const container = document.getElementById('exercise-search-results');
+
+    if (results.length === 0) {
+        container.innerHTML = '';
+        return;
+    }
+
+    const profile = Storage.getProfile();
+    container.innerHTML = results.map(ex => {
+        const adjCal = ExerciseDatabase.adjustForWeight(ex.calPer30, profile.weightLbs);
+        return `<div class="exercise-list-item" onclick="selectExercise('${escapeHtml(ex.name)}', ${ex.calPer30}, '${ex.category}')">
+            <span class="exercise-list-emoji">${ExerciseDatabase.getCategoryEmoji(ex.category)}</span>
+            <span class="exercise-list-name">${escapeHtml(ex.name)}</span>
+            <span class="exercise-list-cal">${adjCal} cal/30min</span>
+        </div>`;
+    }).join('');
+}
+
+function selectCategory(category) {
+    // Toggle active state
+    document.querySelectorAll('.category-chip').forEach(c => c.classList.remove('active'));
+    event.target.closest('.category-chip').classList.add('active');
+
+    const exercises = ExerciseDatabase.getByCategory(category);
+    const profile = Storage.getProfile();
+    const container = document.getElementById('category-exercises');
+
+    container.innerHTML = exercises.map(ex => {
+        const adjCal = ExerciseDatabase.adjustForWeight(ex.calPer30, profile.weightLbs);
+        return `<div class="exercise-list-item" onclick="selectExercise('${escapeHtml(ex.name)}', ${ex.calPer30}, '${ex.category}')">
+            <span class="exercise-list-emoji">${ExerciseDatabase.getCategoryEmoji(ex.category)}</span>
+            <span class="exercise-list-name">${escapeHtml(ex.name)}</span>
+            <span class="exercise-list-cal">${adjCal} cal/30min</span>
+        </div>`;
+    }).join('');
+
+    // Clear search
+    document.getElementById('exercise-search').value = '';
+    document.getElementById('exercise-search-results').innerHTML = '';
+}
+
+function selectExercise(name, calPer30, category) {
+    selectedExerciseData = { name, calPer30, category };
+
+    const profile = Storage.getProfile();
+    const adjCal = ExerciseDatabase.adjustForWeight(calPer30, profile.weightLbs);
+
+    document.getElementById('exercise-details').style.display = 'block';
+    document.getElementById('ex-name').value = name;
+    document.getElementById('ex-duration').value = 30;
+    document.getElementById('ex-intensity').value = '1.0';
+
+    document.getElementById('selected-exercise-card').innerHTML = `
+        <span class="selected-ex-icon">${ExerciseDatabase.getCategoryEmoji(category)}</span>
+        <div class="selected-ex-info">
+            <div class="selected-ex-name">${escapeHtml(name)}</div>
+            <div class="selected-ex-detail">${category} &middot; ~${adjCal} cal/30min</div>
+        </div>`;
+
+    updateExCalories();
+    document.getElementById('exercise-save-btn').disabled = false;
+
+    // Hide search/categories
+    document.getElementById('exercise-search-results').innerHTML = '';
+    document.getElementById('category-exercises').innerHTML = '';
+}
+
+function updateExCalories() {
+    if (!selectedExerciseData) return;
+    const profile = Storage.getProfile();
+    const duration = parseInt(document.getElementById('ex-duration').value) || 30;
+    const intensity = parseFloat(document.getElementById('ex-intensity').value) || 1.0;
+    const baseCal = ExerciseDatabase.adjustForWeight(selectedExerciseData.calPer30, profile.weightLbs);
+    const totalCal = Math.round(baseCal * (duration / 30) * intensity);
+    document.getElementById('ex-calories').value = totalCal;
+}
+
+function saveExercise() {
+    const exercise = {
+        name: document.getElementById('ex-name').value,
+        duration: parseInt(document.getElementById('ex-duration').value) || 30,
+        caloriesBurned: parseInt(document.getElementById('ex-calories').value) || 0,
+        intensity: document.getElementById('ex-intensity').selectedOptions[0].text,
+        category: selectedExerciseData ? selectedExerciseData.category : 'Other',
+        notes: document.getElementById('ex-notes').value,
+        date: document.getElementById('exercise-date').value
+    };
+
+    Storage.addExercise(exercise);
+    closeAddExercise();
+    loadExerciseEntries();
+    updateDashboard();
+    showToast('Exercise logged!');
+}
+
+function loadExerciseEntries() {
+    const dateStr = document.getElementById('exercise-date').value;
+    const exercises = Storage.getExercisesForDate(dateStr);
+
+    const totalBurned = exercises.reduce((s, e) => s + (e.caloriesBurned || 0), 0);
+    const totalDuration = exercises.reduce((s, e) => s + (e.duration || 0), 0);
+
+    document.getElementById('ex-total-burned').textContent = totalBurned.toLocaleString();
+    document.getElementById('ex-total-duration').textContent = totalDuration;
+    document.getElementById('ex-total-count').textContent = exercises.length;
+
+    const container = document.getElementById('exercise-entries');
+    if (exercises.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">\u{1F3CB}\u{FE0F}</div>
+                <p>No exercises logged</p>
+                <small>Tap + to log a workout</small>
+            </div>`;
+    } else {
+        container.innerHTML = exercises.map(e => exerciseRowHTML(e)).join('');
+    }
+}
+
+function exerciseRowHTML(exercise) {
+    const emoji = ExerciseDatabase.getCategoryEmoji(exercise.category || 'Cardio');
+    const time = exercise.timestamp ? Storage.formatTime(exercise.timestamp) : '';
+    const notes = exercise.notes ? ` \u00B7 ${escapeHtml(exercise.notes)}` : '';
+
+    return `
+        <div class="exercise-entry-row">
+            <div class="exercise-entry-icon">${emoji}</div>
+            <div class="exercise-entry-info">
+                <div class="exercise-entry-name">${escapeHtml(exercise.name)}</div>
+                <div class="exercise-entry-meta">${exercise.duration} min \u00B7 ${exercise.intensity || 'Moderate'}${notes}${time ? ' \u00B7 ' + time : ''}</div>
+            </div>
+            <div class="exercise-entry-cal">
+                <span class="exercise-cal-num">-${exercise.caloriesBurned}</span>
+                <span class="exercise-cal-unit">cal</span>
+            </div>
+            <button class="entry-delete" onclick="deleteExerciseEntry('${exercise.id}')">\u2715</button>
+        </div>`;
+}
+
+function deleteExerciseEntry(id) {
+    Storage.deleteExercise(id);
+    loadExerciseEntries();
+    updateDashboard();
+    showToast('Exercise deleted');
+}
+
+function changeExerciseDate(delta) {
+    const input = document.getElementById('exercise-date');
+    const d = new Date(input.value + 'T12:00:00');
+    d.setDate(d.getDate() + delta);
+    input.value = d.toISOString().split('T')[0];
+    loadExerciseEntries();
 }
 
 // ============================================================

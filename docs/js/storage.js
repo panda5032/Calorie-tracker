@@ -1,6 +1,7 @@
 const Storage = {
     PROFILE_KEY: 'ct_profile',
     ENTRIES_KEY: 'ct_entries',
+    EXERCISES_KEY: 'ct_exercises',
 
     getDefaultProfile() {
         const goalDate = new Date();
@@ -65,6 +66,38 @@ const Storage = {
         let entries = this.getAllEntries();
         entries = entries.filter(e => e.id !== id);
         localStorage.setItem(this.ENTRIES_KEY, JSON.stringify(entries));
+    },
+
+    // Exercise methods
+    getAllExercises() {
+        const data = localStorage.getItem(this.EXERCISES_KEY);
+        return data ? JSON.parse(data) : [];
+    },
+
+    getExercisesForDate(dateStr) {
+        return this.getAllExercises()
+            .filter(e => e.date === dateStr)
+            .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    },
+
+    getTodaysExercises() {
+        return this.getExercisesForDate(this.todayStr());
+    },
+
+    addExercise(exercise) {
+        const exercises = this.getAllExercises();
+        exercise.id = Date.now().toString(36) + Math.random().toString(36).substr(2, 5);
+        exercise.date = exercise.date || this.todayStr();
+        exercise.timestamp = new Date().toISOString();
+        exercises.push(exercise);
+        localStorage.setItem(this.EXERCISES_KEY, JSON.stringify(exercises));
+        return exercise;
+    },
+
+    deleteExercise(id) {
+        let exercises = this.getAllExercises();
+        exercises = exercises.filter(e => e.id !== id);
+        localStorage.setItem(this.EXERCISES_KEY, JSON.stringify(exercises));
     },
 
     todayStr() {

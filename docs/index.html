@@ -68,6 +68,26 @@
                     </div>
                 </div>
 
+                <div class="card exercise-dash-card">
+                    <div class="exercise-dash-row">
+                        <div class="exercise-dash-item">
+                            <span class="exercise-dash-icon">&#x1F525;</span>
+                            <span class="exercise-dash-value" id="dash-burned">0</span>
+                            <span class="exercise-dash-label">Burned</span>
+                        </div>
+                        <div class="exercise-dash-item">
+                            <span class="exercise-dash-icon">&#x2696;&#xFE0F;</span>
+                            <span class="exercise-dash-value accent" id="dash-net">0</span>
+                            <span class="exercise-dash-label">Net Cal</span>
+                        </div>
+                        <div class="exercise-dash-item">
+                            <span class="exercise-dash-icon">&#x23F1;&#xFE0F;</span>
+                            <span class="exercise-dash-value" id="dash-ex-minutes">0</span>
+                            <span class="exercise-dash-label">Minutes</span>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="card">
                     <h3>Today's Food</h3>
                     <div id="today-entries" class="entries-list">
@@ -145,6 +165,47 @@
 
                 <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(event)">
                 <input type="file" id="library-input" accept="image/*" style="display:none" onchange="handlePhoto(event)">
+            </div>
+        </div>
+
+        <!-- Exercise Tab -->
+        <div id="tab-exercise" class="tab-content">
+            <header class="tab-header">
+                <h1>Exercise</h1>
+                <button class="header-btn" onclick="showAddExercise()">+</button>
+            </header>
+            <div class="scroll-content">
+                <div class="date-picker-row">
+                    <button class="date-nav" onclick="changeExerciseDate(-1)">&lsaquo;</button>
+                    <input type="date" id="exercise-date" class="date-input" onchange="loadExerciseEntries()">
+                    <button class="date-nav" onclick="changeExerciseDate(1)">&rsaquo;</button>
+                </div>
+
+                <div class="exercise-summary-row">
+                    <div class="card stat-card">
+                        <span class="stat-label">Burned</span>
+                        <span class="stat-value exercise-burned" id="ex-total-burned">0</span>
+                        <span class="stat-unit">cal</span>
+                    </div>
+                    <div class="card stat-card">
+                        <span class="stat-label">Duration</span>
+                        <span class="stat-value" id="ex-total-duration">0</span>
+                        <span class="stat-unit">min</span>
+                    </div>
+                    <div class="card stat-card">
+                        <span class="stat-label">Workouts</span>
+                        <span class="stat-value" id="ex-total-count">0</span>
+                        <span class="stat-unit">&nbsp;</span>
+                    </div>
+                </div>
+
+                <div id="exercise-entries" class="entries-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">&#x1F3CB;&#xFE0F;</div>
+                        <p>No exercises logged</p>
+                        <small>Tap + to log a workout</small>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -342,28 +403,87 @@
             </div>
         </div>
 
+        <!-- Add Exercise Modal -->
+        <div id="exercise-modal" class="modal" style="display:none">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button class="modal-close" onclick="closeAddExercise()">Cancel</button>
+                    <h3>Add Exercise</h3>
+                    <button class="modal-save" id="exercise-save-btn" onclick="saveExercise()" disabled>Save</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-section">
+                        <label>Search Exercise</label>
+                        <input type="text" id="exercise-search" placeholder="Search exercises..." oninput="searchExercise(this.value)">
+                        <div id="exercise-search-results" class="search-results"></div>
+                    </div>
+
+                    <div class="form-section">
+                        <label>Category</label>
+                        <div class="category-chips" id="category-chips"></div>
+                    </div>
+
+                    <div id="category-exercises" class="search-results"></div>
+
+                    <div class="form-section" id="exercise-details" style="display:none">
+                        <label>Workout Details</label>
+                        <div class="selected-exercise-card" id="selected-exercise-card"></div>
+                        <div class="form-row">
+                            <span>Exercise</span>
+                            <input type="text" id="ex-name" readonly>
+                        </div>
+                        <div class="form-row">
+                            <span>Duration (min)</span>
+                            <input type="number" id="ex-duration" value="30" min="1" oninput="updateExCalories()">
+                        </div>
+                        <div class="form-row">
+                            <span>Calories Burned</span>
+                            <input type="number" id="ex-calories" value="0">
+                        </div>
+                        <div class="form-row">
+                            <span>Intensity</span>
+                            <select id="ex-intensity" onchange="updateExCalories()">
+                                <option value="0.8">Light</option>
+                                <option value="1.0" selected>Moderate</option>
+                                <option value="1.3">Vigorous</option>
+                            </select>
+                        </div>
+                        <div class="form-row">
+                            <span>Notes</span>
+                            <input type="text" id="ex-notes" placeholder="Optional" style="width:150px">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Tab Bar -->
         <nav class="tab-bar">
             <button class="tab-btn active" onclick="switchTab('dashboard')" id="btn-dashboard">
-                <span class="tab-icon">📊</span>
+                <span class="tab-icon">&#x1F4CA;</span>
                 <span class="tab-label">Dashboard</span>
             </button>
             <button class="tab-btn" onclick="switchTab('log')" id="btn-log">
-                <span class="tab-icon">📋</span>
-                <span class="tab-label">Food Log</span>
+                <span class="tab-icon">&#x1F4CB;</span>
+                <span class="tab-label">Food</span>
             </button>
             <button class="tab-btn" onclick="switchTab('scan')" id="btn-scan">
-                <span class="tab-icon">📸</span>
+                <span class="tab-icon">&#x1F4F8;</span>
                 <span class="tab-label">Scan</span>
             </button>
+            <button class="tab-btn" onclick="switchTab('exercise')" id="btn-exercise">
+                <span class="tab-icon">&#x1F4AA;</span>
+                <span class="tab-label">Exercise</span>
+            </button>
             <button class="tab-btn" onclick="switchTab('profile')" id="btn-profile">
-                <span class="tab-icon">👤</span>
+                <span class="tab-icon">&#x1F464;</span>
                 <span class="tab-label">Profile</span>
             </button>
         </nav>
     </div>
 
     <script src="js/food-database.js"></script>
+    <script src="js/exercise-database.js"></script>
     <script src="js/calorie-calculator.js"></script>
     <script src="js/storage.js"></script>
     <script src="js/app.js"></script>
