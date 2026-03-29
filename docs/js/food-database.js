@@ -114,8 +114,8 @@ const FoodDatabase = {
         return new Promise((resolve) => {
             const img = new Image();
             img.onload = () => {
-                const colorProfile = this._analyzeColors(img);
-                resolve(this._classifyFromColors(colorProfile));
+                const cp = this._analyzeColors(img);
+                resolve(this._classifyFromColors(cp));
             };
             img.onerror = () => resolve(this._fallback());
             img.src = imageData;
@@ -133,10 +133,10 @@ const FoodDatabase = {
         const data = ctx.getImageData(0, 0, S, S).data;
 
         let tR = 0, tG = 0, tB = 0, n = 0;
-        let redPx = 0, greenPx = 0, brownPx = 0, yellowPx = 0;
-        let whitePx = 0, darkPx = 0, orangePx = 0, pinkPx = 0;
-        const m = Math.floor(S * 0.1);
+        const regions = { red: 0, green: 0, brown: 0, yellow: 0, white: 0, dark: 0, orange: 0, pink: 0, beige: 0, purple: 0, gray: 0 };
+        const m = Math.floor(S * 0.05); // smaller margin to capture more
         const rVals = [], gVals = [], bVals = [];
+        const brightnessHist = new Array(10).fill(0); // brightness histogram in 10 buckets
 
         for (let y = m; y < S - m; y++) {
             for (let x = m; x < S - m; x++) {
@@ -148,15 +148,21 @@ const FoodDatabase = {
 
                 const br = (r + g + b) / 3;
                 const sat = Math.max(r, g, b) - Math.min(r, g, b);
+                brightnessHist[Math.min(9, Math.floor(br / 25.6))]++;
 
-                if (br > 200 && sat < 40) whitePx++;
-                else if (br < 60) darkPx++;
-                else if (r > 160 && g < 100 && b < 100) redPx++;
-                else if (g > 120 && g > r * 0.8 && g > b * 1.2) greenPx++;
-                else if (r > 150 && g > 100 && g < 170 && b < 80) orangePx++;
-                else if (r > 140 && g > 90 && b < 90) yellowPx++;
-                else if (r > 120 && g > 70 && g < 130 && b > 50 && b < 110 && r > b) brownPx++;
-                else if (r > 150 && g < 140 && b > 100 && b < 180) pinkPx++;
+                // Classify each pixel into a color region
+                if (br < 40) regions.dark++;
+                else if (br > 220 && sat < 30) regions.white++;
+                else if (sat < 25 && br > 40 && br < 220) regions.gray++;
+                else if (r > 180 && g < 80 && b < 80) regions.red++;
+                else if (r > 200 && g > 100 && g < 180 && b < 60) regions.orange++;
+                else if (r > 180 && g > 150 && b < 80) regions.yellow++;
+                else if (g > 100 && g > r + 20 && g > b + 20) regions.green++;
+                else if (r > 100 && g > 60 && g < r * 0.85 && b < r * 0.7 && br < 160) regions.brown++;
+                else if (r > 150 && b > 100 && g < Math.min(r, b)) regions.pink++;
+                else if (b > 100 && r > 80 && g < 80) regions.purple++;
+                else if (r > 150 && g > 120 && b > 90 && sat < 60) regions.beige++;
+                else if (br < 80) regions.dark++; // catch more darks
             }
         }
 
@@ -168,56 +174,128 @@ const FoodDatabase = {
         const varB = bVals.reduce((s, v) => s + (v - avgB) ** 2, 0) / n;
         const colorVariance = Math.sqrt((varR + varG + varB) / 3);
 
-        const regions = { red: redPx, green: greenPx, brown: brownPx, yellow: yellowPx, white: whitePx, dark: darkPx, orange: orangePx, pink: pinkPx };
-        return { avgR, avgG, avgB, brightness, saturation, colorVariance, regions, totalPixels: n };
+        // Detect if likely a drink (tall aspect, dark center, etc.)
+        const darkRatio = (regions.dark) / n;
+        const brownRatio = regions.brown / n;
+        const hasTranslucency = darkRatio > 0.15 || (brownRatio > 0.1 && darkRatio > 0.08);
+
+        return { avgR, avgG, avgB, brightness, saturation, colorVariance, regions, totalPixels: n, darkRatio, brightnessHist, hasTranslucency };
     },
 
-    // Match color profile to foods
+    // Match color profile to foods - improved scoring
     _classifyFromColors(cp) {
         const scored = [];
-        const pct = (r) => (cp.regions[r] || 0) / cp.totalPixels * 100;
+        const p = (r) => (cp.regions[r] || 0) / cp.totalPixels * 100;
 
-        const greenPct = pct('green'), brownPct = pct('brown'), redPct = pct('red');
-        const yellowPct = pct('yellow'), orangePct = pct('orange');
-        const whitePct = pct('white'), darkPct = pct('dark'), pinkPct = pct('pink');
+        const gP = p('green'), brP = p('brown'), rP = p('red');
+        const yP = p('yellow'), oP = p('orange');
+        const wP = p('white'), dP = p('dark'), pkP = p('pink');
+        const beP = p('beige'), grP = p('gray'), puP = p('purple');
 
-        // Food-to-color mapping
-        const colorRules = [
-            { colors: ['green'], min: 20, foods: { 50: ["salad","broccoli","spinach","green beans","avocado"], 25: ["apple","grapes"] }},
-            { colors: ['brown'], min: 15, foods: { 45: ["steak","grilled chicken breast","fried chicken","burger","bread","bagel","muffin"], 35: ["cookie","donut","chocolate","oatmeal","pancakes","waffle","granola bar"], 25: ["pasta","rice","brown rice","peanut butter","almonds","trail mix"] }},
-            { colors: ['red'], min: 15, foods: { 45: ["pizza","tacos","ramen","strawberries","watermelon"], 35: ["steak","burger","hot dog","bacon"], 25: ["nachos","burrito","soup"] }},
-            { colors: ['yellow','orange'], min: 12, foods: { 45: ["mac and cheese","cheese","french fries","chips","nachos","corn"], 35: ["eggs","pancakes","fried rice","orange","mango"], 25: ["orange juice","banana","cereal"] }},
-            { colors: ['white'], min: 25, foods: { 45: ["rice","milk","yogurt","tofu","bread","potato"], 30: ["pasta","ice cream","cereal","oatmeal"] }},
-            { colors: ['dark'], min: 25, foods: { 50: ["coffee","chocolate","soda","beer","wine"], 30: ["blueberries","steak","ramen"] }},
-            { colors: ['pink'], min: 10, foods: { 45: ["salmon","shrimp","smoothie"], 25: ["ice cream","yogurt","watermelon"] }},
-        ];
-
-        const pcts = { green: greenPct, brown: brownPct, red: redPct, yellow: yellowPct, orange: orangePct, white: whitePct, dark: darkPct, pink: pinkPct };
+        // Detect drink-like images: significant dark + some color
+        const isDrinkLikely = dP > 12 || (dP > 8 && brP > 8) || (dP > 8 && rP > 5);
+        // Detect solid food plate: moderate brightness, varied colors
+        const isPlate = cp.colorVariance > 45 && cp.brightness > 80 && cp.brightness < 190;
+        // Detect light/white food
+        const isLight = wP > 30 || (wP > 20 && beP > 10);
+        // Detect very green
+        const isGreen = gP > 25;
 
         for (const [key, food] of Object.entries(this.foods)) {
             let score = 0;
 
-            for (const rule of colorRules) {
-                const active = rule.colors.some(c => pcts[c] >= rule.min);
-                if (active) {
-                    for (const [pts, foods] of Object.entries(rule.foods)) {
-                        if (foods.includes(key)) score += parseInt(pts);
-                    }
+            // ===== DRINKS =====
+            if (isDrinkLikely) {
+                // Dark drinks (cola, coffee, beer)
+                if (dP > 15) {
+                    if (["soda","coffee","beer","wine"].includes(key)) score += 60;
+                    if (["chocolate","blueberries"].includes(key)) score += 15;
+                }
+                // Dark + brown (coffee, cola with caramel)
+                if (dP > 8 && brP > 8) {
+                    if (["soda","coffee","latte","beer"].includes(key)) score += 55;
+                }
+                // Pink/red drinks
+                if (pkP > 8 || (rP > 8 && isDrinkLikely)) {
+                    if (["smoothie","soda","wine"].includes(key)) score += 40;
+                }
+                // Light colored drinks
+                if (wP > 15 && isDrinkLikely && grP < 20) {
+                    if (["milk","latte","protein shake"].includes(key)) score += 40;
+                }
+                // Orange drinks
+                if (oP > 10) {
+                    if (["orange juice","smoothie"].includes(key)) score += 45;
                 }
             }
 
-            // Mixed plate bonus
-            if (cp.colorVariance > 55) {
-                if (["burrito","sushi","ramen","fried rice","nachos","salad","tacos","pizza","burger","sandwich"].includes(key)) score += 20;
+            // ===== GREEN FOODS =====
+            if (isGreen) {
+                if (["salad","broccoli","spinach","green beans","avocado"].includes(key)) score += 55;
+                if (["apple","grapes"].includes(key)) score += 20;
+            } else if (gP > 10) {
+                if (["salad","broccoli","avocado"].includes(key)) score += 25;
             }
 
-            // Smooth/liquid bonus
-            if (cp.colorVariance < 25 && cp.brightness > 80 && cp.brightness < 200) {
-                if (["coffee","milk","orange juice","smoothie","protein shake","latte","soup","beer","wine","soda"].includes(key)) score += 35;
+            // ===== BROWN FOODS (meats, bread, baked goods) =====
+            if (brP > 20 && !isDrinkLikely) {
+                if (["steak","grilled chicken breast","fried chicken","burger"].includes(key)) score += 50;
+                if (["bread","bagel","muffin","cookie","donut"].includes(key)) score += 40;
+                if (["pancakes","waffle","granola bar","oatmeal"].includes(key)) score += 30;
+                if (["chocolate","peanut butter","almonds"].includes(key)) score += 20;
+            } else if (brP > 10 && !isDrinkLikely) {
+                if (["grilled chicken breast","bread","pasta","rice"].includes(key)) score += 20;
+                if (["cookie","donut","muffin"].includes(key)) score += 15;
             }
 
+            // ===== RED FOODS =====
+            if (rP > 15 && !isDrinkLikely) {
+                if (["pizza","tacos","ramen","strawberries","watermelon"].includes(key)) score += 50;
+                if (["steak","burger","hot dog","bacon"].includes(key)) score += 35;
+                if (["nachos","burrito","soup"].includes(key)) score += 25;
+            } else if (rP > 8 && !isDrinkLikely) {
+                if (["pizza","tacos","burger"].includes(key)) score += 20;
+            }
+
+            // ===== YELLOW/ORANGE FOODS =====
+            if ((yP > 12 || oP > 12) && !isDrinkLikely) {
+                if (["mac and cheese","cheese","french fries","chips","nachos","corn"].includes(key)) score += 50;
+                if (["eggs","pancakes","fried rice","orange","mango"].includes(key)) score += 35;
+                if (["banana","cereal"].includes(key)) score += 25;
+            }
+
+            // ===== WHITE/LIGHT FOODS =====
+            if (isLight && !isDrinkLikely) {
+                if (["rice","yogurt","tofu","bread","potato"].includes(key)) score += 45;
+                if (["pasta","ice cream","cereal","oatmeal"].includes(key)) score += 30;
+            }
+
+            // ===== DARK SOLID FOODS (not drinks) =====
+            if (dP > 20 && !isDrinkLikely && cp.colorVariance > 40) {
+                if (["chocolate","blueberries","steak"].includes(key)) score += 35;
+            }
+
+            // ===== PINK FOODS =====
+            if (pkP > 10 && !isDrinkLikely) {
+                if (["salmon","shrimp"].includes(key)) score += 50;
+                if (["ice cream","yogurt","watermelon"].includes(key)) score += 25;
+            }
+
+            // ===== BEIGE (bread-like, grains) =====
+            if (beP > 15 && !isDrinkLikely) {
+                if (["bread","rice","pasta","oatmeal","potato","cereal","bagel"].includes(key)) score += 30;
+                if (["pancakes","waffle","tortilla"].includes(key)) score += 20;
+            }
+
+            // ===== MIXED PLATE =====
+            if (isPlate) {
+                if (["burrito","sushi","ramen","fried rice","nachos","salad","tacos","pizza","burger","sandwich"].includes(key)) score += 15;
+            }
+
+            // Only add if score > 0
             if (score > 0) {
-                score *= (0.92 + Math.random() * 0.16);
+                // Small randomization (±5%)
+                score *= (0.95 + Math.random() * 0.10);
                 scored.push({ key, food, score });
             }
         }
@@ -230,7 +308,7 @@ const FoodDatabase = {
         const max = top[0].score;
         return top.map(item => ({
             name: item.food.name,
-            confidence: Math.min(0.95, (item.score / max) * 0.82 + 0.12),
+            confidence: Math.min(0.94, (item.score / max) * 0.80 + 0.12),
             cal: item.food.cal, protein: item.food.protein,
             carbs: item.food.carbs, fat: item.food.fat,
             serving: item.food.serving
@@ -241,7 +319,7 @@ const FoodDatabase = {
     _fallback() {
         const meals = ["grilled chicken breast","rice","salad","pizza","burger","salmon","pasta","sandwich","eggs","steak","tacos","sushi","burrito","soup","fried rice"];
         const shuffled = meals.sort(() => Math.random() - 0.5);
-        let conf = 0.50;
+        let conf = 0.45;
         return shuffled.slice(0, 5).map(key => {
             const f = this.foods[key];
             const r = { name: f.name, confidence: conf, cal: f.cal, protein: f.protein, carbs: f.carbs, fat: f.fat, serving: f.serving };

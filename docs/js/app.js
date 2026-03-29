@@ -331,7 +331,10 @@ function analyzeFood() {
                 <span class="result-arrow">\u203A</span>
             </div>
         `).join('') + `
-            <button class="btn btn-text" onclick="resetScan()" style="margin-top:12px">\u2190 Back to Camera</button>
+            <div class="scan-results-actions">
+                <button class="btn btn-secondary" onclick="noneOfTheseManual()" style="width:100%">None of these \u2013 Enter Manually</button>
+                <button class="btn btn-text" onclick="resetScan()">\u2190 Back to Camera</button>
+            </div>
         `;
     });
 }
@@ -375,6 +378,12 @@ function saveFoodResult() {
     resetScan();
     updateDashboard();
     showToast('Food added!');
+}
+
+function noneOfTheseManual() {
+    // Open manual entry modal so user can type in their food
+    document.getElementById('scan-results').style.display = 'none';
+    showManualEntry();
 }
 
 function resetScan() {
