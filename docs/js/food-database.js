@@ -93,10 +93,26 @@ const FoodDatabase = {
     search(query) {
         if (!query || query.length < 2) return [];
         const lower = query.toLowerCase();
-        return Object.values(this.foods)
-            .filter(f => f.name.toLowerCase().includes(lower))
-            .sort((a, b) => a.name.localeCompare(b.name))
-            .slice(0, 6);
+        const words = lower.split(/\s+/);
+        return Object.entries(this.foods)
+            .filter(([key, f]) => {
+                const name = f.name.toLowerCase();
+                // Match if query appears in name OR key, or all words match
+                return name.includes(lower) || key.includes(lower) ||
+                    words.every(w => name.includes(w) || key.includes(w));
+            })
+            .map(([key, f]) => {
+                // Score: exact match first, starts-with next, then contains
+                const name = f.name.toLowerCase();
+                let score = 0;
+                if (name === lower || key === lower) score = 3;
+                else if (name.startsWith(lower) || key.startsWith(lower)) score = 2;
+                else score = 1;
+                return { food: f, score };
+            })
+            .sort((a, b) => b.score - a.score || a.food.name.localeCompare(b.food.name))
+            .map(item => item.food)
+            .slice(0, 10);
     },
 
     lookup(name) {
