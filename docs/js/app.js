@@ -314,25 +314,26 @@ function analyzeFood() {
     document.getElementById('scan-results-list').innerHTML = `
         <div class="loading">
             <div class="spinner"></div>
-            <span>Analyzing food...</span>
+            <span>Analyzing food colors &amp; patterns...</span>
         </div>`;
 
-    // Simulate analysis delay
-    setTimeout(() => {
-        const results = FoodDatabase.classifyFood();
+    // Use real image color analysis
+    FoodDatabase.classifyFromImage(scanImageData).then(results => {
         resultsDiv.querySelector('h3').textContent = 'What did we find?';
 
         document.getElementById('scan-results-list').innerHTML = results.map(r => `
             <div class="result-item" onclick="selectScanResult('${escapeHtml(r.name)}', ${r.cal}, ${r.protein}, ${r.carbs}, ${r.fat}, '${escapeHtml(r.serving)}')">
                 <div class="result-info">
                     <div class="result-name">${escapeHtml(r.name)}</div>
-                    <div class="result-meta">${r.cal} cal · ${r.serving}</div>
+                    <div class="result-meta">${r.cal} cal \u00B7 ${r.serving}</div>
                 </div>
                 <span class="result-confidence">${Math.round(r.confidence * 100)}%</span>
-                <span class="result-arrow">›</span>
+                <span class="result-arrow">\u203A</span>
             </div>
-        `).join('');
-    }, 1200);
+        `).join('') + `
+            <button class="btn btn-text" onclick="resetScan()" style="margin-top:12px">\u2190 Back to Camera</button>
+        `;
+    });
 }
 
 function selectScanResult(name, cal, protein, carbs, fat, serving) {
@@ -347,6 +348,7 @@ function selectScanResult(name, cal, protein, carbs, fat, serving) {
 
 function closeFoodResult() {
     document.getElementById('food-result-modal').style.display = 'none';
+    // Goes back to results list so user can pick a different item
 }
 
 function saveFoodResult() {
