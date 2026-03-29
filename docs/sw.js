@@ -1,15 +1,15 @@
-const CACHE_NAME = 'calorie-tracker-v1';
+const CACHE_NAME = 'calorie-tracker-v2';
 const ASSETS = [
-    '/',
-    '/index.html',
-    '/css/styles.css',
-    '/js/app.js',
-    '/js/calorie-calculator.js',
-    '/js/food-database.js',
-    '/js/storage.js',
-    '/manifest.json',
-    '/icons/icon-192.png',
-    '/icons/icon-512.png'
+    './',
+    './index.html',
+    './css/styles.css',
+    './js/app.js',
+    './js/calorie-calculator.js',
+    './js/food-database.js',
+    './js/storage.js',
+    './manifest.json',
+    './icons/icon-192.png',
+    './icons/icon-512.png'
 ];
 
 // Install: cache all assets
@@ -38,6 +38,6 @@ self.addEventListener('fetch', event => {
     event.respondWith(
         caches.match(event.request)
             .then(cached => cached || fetch(event.request))
-            .catch(() => caches.match('/index.html'))
+            .catch(() => caches.match('./index.html'))
     );
 });
