@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="CalTracker">
+    <meta name="theme-color" content="#1a1a2e">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="stylesheet" href="css/styles.css">
+    <title>Calorie Tracker</title>
+</head>
+<body>
+    <div id="app">
+        <!-- Dashboard Tab -->
+        <div id="tab-dashboard" class="tab-content active">
+            <header class="tab-header">
+                <h1>Dashboard</h1>
+            </header>
+            <div class="scroll-content">
+                <div class="calorie-ring-container">
+                    <svg class="calorie-ring" viewBox="0 0 200 200">
+                        <circle class="ring-bg" cx="100" cy="100" r="80" />
+                        <circle class="ring-progress" id="ring-progress" cx="100" cy="100" r="80" />
+                    </svg>
+                    <div class="ring-text">
+                        <span class="ring-consumed" id="ring-consumed">0</span>
+                        <span class="ring-label" id="ring-label">of 1955 cal</span>
+                        <span class="ring-remaining" id="ring-remaining">1955 remaining</span>
+                    </div>
+                </div>
+
+                <div class="card macro-card">
+                    <div class="macro-item">
+                        <div class="macro-dot protein"></div>
+                        <span class="macro-value" id="dash-protein">0g</span>
+                        <span class="macro-label">Protein</span>
+                    </div>
+                    <div class="macro-item">
+                        <div class="macro-dot carbs"></div>
+                        <span class="macro-value" id="dash-carbs">0g</span>
+                        <span class="macro-label">Carbs</span>
+                    </div>
+                    <div class="macro-item">
+                        <div class="macro-dot fat"></div>
+                        <span class="macro-value" id="dash-fat">0g</span>
+                        <span class="macro-label">Fat</span>
+                    </div>
+                </div>
+
+                <div class="stats-row">
+                    <div class="card stat-card">
+                        <span class="stat-label">BMR</span>
+                        <span class="stat-value" id="dash-bmr">1911</span>
+                        <span class="stat-unit">cal</span>
+                    </div>
+                    <div class="card stat-card">
+                        <span class="stat-label">TDEE</span>
+                        <span class="stat-value" id="dash-tdee">2628</span>
+                        <span class="stat-unit">cal</span>
+                    </div>
+                    <div class="card stat-card">
+                        <span class="stat-label">Target</span>
+                        <span class="stat-value" id="dash-target">1955</span>
+                        <span class="stat-unit">cal</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Today's Food</h3>
+                    <div id="today-entries" class="entries-list">
+                        <div class="empty-state">
+                            <div class="empty-icon">🍽️</div>
+                            <p>No food logged today</p>
+                            <small>Use the Scan tab to get started</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Food Log Tab -->
+        <div id="tab-log" class="tab-content">
+            <header class="tab-header">
+                <h1>Food Log</h1>
+                <button class="header-btn" onclick="showManualEntry()">+</button>
+            </header>
+            <div class="scroll-content">
+                <div class="date-picker-row">
+                    <button class="date-nav" onclick="changeLogDate(-1)">‹</button>
+                    <input type="date" id="log-date" class="date-input" onchange="loadLogEntries()">
+                    <button class="date-nav" onclick="changeLogDate(1)">›</button>
+                </div>
+                <div class="log-total">
+                    <span>Total</span>
+                    <span class="accent" id="log-total-cal">0 cal</span>
+                </div>
+                <div id="log-entries" class="entries-list">
+                    <div class="empty-state">
+                        <div class="empty-icon">📋</div>
+                        <p>No food logged</p>
+                        <small>Tap + to add a food entry</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Scan Food Tab -->
+        <div id="tab-scan" class="tab-content">
+            <header class="tab-header">
+                <h1>Scan Food</h1>
+            </header>
+            <div class="scroll-content scan-content">
+                <div id="scan-preview-area">
+                    <div id="scan-placeholder" class="scan-placeholder">
+                        <div class="scan-icon">📷</div>
+                        <h3>Take a photo of your food</h3>
+                        <p>We'll estimate the calories for you</p>
+                    </div>
+                    <img id="scan-preview" class="scan-preview-img" style="display:none">
+                </div>
+
+                <div id="scan-actions" class="scan-actions">
+                    <button class="btn btn-primary" onclick="takePhoto()">
+                        📸 Take Photo
+                    </button>
+                    <button class="btn btn-secondary" onclick="pickPhoto()">
+                        🖼️ Choose from Library
+                    </button>
+                </div>
+
+                <div id="scan-analyze" class="scan-actions" style="display:none">
+                    <button class="btn btn-primary" onclick="analyzeFood()">
+                        ✨ Analyze Food
+                    </button>
+                    <button class="btn btn-text" onclick="resetScan()">Retake Photo</button>
+                </div>
+
+                <div id="scan-results" style="display:none">
+                    <h3>What did we find?</h3>
+                    <div id="scan-results-list" class="results-list"></div>
+                </div>
+
+                <input type="file" id="camera-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(event)">
+                <input type="file" id="library-input" accept="image/*" style="display:none" onchange="handlePhoto(event)">
+            </div>
+        </div>
+
+        <!-- Profile Tab -->
+        <div id="tab-profile" class="tab-content">
+            <header class="tab-header">
+                <h1>Profile</h1>
+            </header>
+            <div class="scroll-content">
+                <div class="card">
+                    <h3>Personal Info</h3>
+                    <div class="form-row">
+                        <label>Weight (lbs)</label>
+                        <input type="number" id="prof-weight" value="215" step="0.1" onchange="recalcProfile()">
+                    </div>
+                    <div class="form-row">
+                        <label>Height</label>
+                        <div class="height-inputs">
+                            <input type="number" id="prof-height-ft" value="5" min="3" max="8" onchange="recalcProfile()">
+                            <span>ft</span>
+                            <input type="number" id="prof-height-in" value="10" min="0" max="11" onchange="recalcProfile()">
+                            <span>in</span>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <label>Age</label>
+                        <input type="number" id="prof-age" value="36" onchange="recalcProfile()">
+                    </div>
+                    <div class="form-row">
+                        <label>Sex</label>
+                        <select id="prof-sex" onchange="recalcProfile()">
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                        </select>
+                    </div>
+                    <div class="form-row">
+                        <label>Activity Level</label>
+                        <select id="prof-activity" onchange="recalcProfile()">
+                            <option value="1.2">Sedentary</option>
+                            <option value="1.375" selected>Lightly Active</option>
+                            <option value="1.55">Moderately Active</option>
+                            <option value="1.725">Very Active</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Goal</h3>
+                    <div class="form-row">
+                        <label>Goal Weight (lbs)</label>
+                        <input type="number" id="prof-goal-weight" value="180" step="0.1" onchange="recalcProfile()">
+                    </div>
+                    <div class="form-row">
+                        <label>Goal Date</label>
+                        <input type="date" id="prof-goal-date" onchange="recalcProfile()">
+                    </div>
+                    <div class="form-row">
+                        <label>Weekly Loss Rate</label>
+                        <span class="form-value" id="prof-weekly-rate">1.3 lbs/week</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Calculated Values</h3>
+                    <div class="form-row">
+                        <label>BMR</label>
+                        <span class="form-value" id="prof-bmr">1,911 cal</span>
+                    </div>
+                    <div class="form-row">
+                        <label>TDEE</label>
+                        <span class="form-value" id="prof-tdee">2,628 cal</span>
+                    </div>
+                    <div class="form-row">
+                        <label>Daily Calorie Target</label>
+                        <span class="form-value accent" id="prof-target">1,955 cal</span>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3>Weight Loss Progress</h3>
+                    <div class="progress-bar-container">
+                        <div class="progress-bar" id="weight-progress-bar"></div>
+                    </div>
+                    <div class="progress-labels">
+                        <div>
+                            <span class="progress-value" id="prog-start">215.0 lbs</span>
+                            <span class="progress-sublabel">Start</span>
+                        </div>
+                        <div class="progress-center">
+                            <span class="progress-value accent" id="prog-current">215.0 lbs</span>
+                            <span class="progress-sublabel">Current</span>
+                        </div>
+                        <div>
+                            <span class="progress-value" id="prog-goal">180.0 lbs</span>
+                            <span class="progress-sublabel">Goal</span>
+                        </div>
+                    </div>
+                    <div class="stats-row" style="margin-top:16px">
+                        <div class="mini-stat">
+                            <span class="mini-stat-value" id="prog-lost">0.0</span>
+                            <span class="mini-stat-label">lbs lost</span>
+                        </div>
+                        <div class="mini-stat">
+                            <span class="mini-stat-value" id="prog-togo">35.0</span>
+                            <span class="mini-stat-label">lbs to go</span>
+                        </div>
+                        <div class="mini-stat">
+                            <span class="mini-stat-value" id="prog-days">182</span>
+                            <span class="mini-stat-label">days left</span>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-primary" onclick="saveProfile()" style="margin:16px">Save Changes</button>
+            </div>
+        </div>
+
+        <!-- Manual Entry Modal -->
+        <div id="manual-entry-modal" class="modal" style="display:none">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button class="modal-close" onclick="closeManualEntry()">Cancel</button>
+                    <h3>Add Food</h3>
+                    <button class="modal-save" id="manual-save-btn" onclick="saveManualEntry()" disabled>Save</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-section">
+                        <label>Food Search</label>
+                        <input type="text" id="manual-name" placeholder="Search food name..." oninput="searchFood(this.value)">
+                        <div id="search-results" class="search-results"></div>
+                    </div>
+                    <div class="form-section">
+                        <label>Nutrition Info</label>
+                        <div class="form-row">
+                            <span>Calories</span>
+                            <input type="number" id="manual-calories" placeholder="0" oninput="checkManualForm()">
+                        </div>
+                        <div class="form-row">
+                            <span>Protein (g)</span>
+                            <input type="number" id="manual-protein" placeholder="0" step="0.1">
+                        </div>
+                        <div class="form-row">
+                            <span>Carbs (g)</span>
+                            <input type="number" id="manual-carbs" placeholder="0" step="0.1">
+                        </div>
+                        <div class="form-row">
+                            <span>Fat (g)</span>
+                            <input type="number" id="manual-fat" placeholder="0" step="0.1">
+                        </div>
+                        <div class="form-row">
+                            <span>Serving Size</span>
+                            <input type="text" id="manual-serving" placeholder="1 serving" value="1 serving">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Food Result Modal (from scan) -->
+        <div id="food-result-modal" class="modal" style="display:none">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <button class="modal-close" onclick="closeFoodResult()">Cancel</button>
+                    <h3>Confirm Food</h3>
+                    <button class="modal-save" onclick="saveFoodResult()">Save</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-section">
+                        <div class="form-row">
+                            <span>Name</span>
+                            <input type="text" id="result-name">
+                        </div>
+                        <div class="form-row">
+                            <span>Calories</span>
+                            <input type="number" id="result-calories">
+                        </div>
+                        <div class="form-row">
+                            <span>Protein (g)</span>
+                            <input type="number" id="result-protein" step="0.1">
+                        </div>
+                        <div class="form-row">
+                            <span>Carbs (g)</span>
+                            <input type="number" id="result-carbs" step="0.1">
+                        </div>
+                        <div class="form-row">
+                            <span>Fat (g)</span>
+                            <input type="number" id="result-fat" step="0.1">
+                        </div>
+                        <div class="form-row">
+                            <span>Serving</span>
+                            <input type="text" id="result-serving">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Tab Bar -->
+        <nav class="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('dashboard')" id="btn-dashboard">
+                <span class="tab-icon">📊</span>
+                <span class="tab-label">Dashboard</span>
+            </button>
+            <button class="tab-btn" onclick="switchTab('log')" id="btn-log">
+                <span class="tab-icon">📋</span>
+                <span class="tab-label">Food Log</span>
+            </button>
+            <button class="tab-btn" onclick="switchTab('scan')" id="btn-scan">
+                <span class="tab-icon">📸</span>
+                <span class="tab-label">Scan</span>
+            </button>
+            <button class="tab-btn" onclick="switchTab('profile')" id="btn-profile">
+                <span class="tab-icon">👤</span>
+                <span class="tab-label">Profile</span>
+            </button>
+        </nav>
+    </div>
+
+    <script src="js/food-database.js"></script>
+    <script src="js/calorie-calculator.js"></script>
+    <script src="js/storage.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>
