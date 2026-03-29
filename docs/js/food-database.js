@@ -174,12 +174,19 @@ const FoodDatabase = {
         const varB = bVals.reduce((s, v) => s + (v - avgB) ** 2, 0) / n;
         const colorVariance = Math.sqrt((varR + varG + varB) / 3);
 
-        // Detect if likely a drink (tall aspect, dark center, etc.)
+        // Detect if likely a drink
         const darkRatio = (regions.dark) / n;
         const brownRatio = regions.brown / n;
+        const grayRatio = regions.gray / n;
+        const whiteRatio = regions.white / n;
         const hasTranslucency = darkRatio > 0.15 || (brownRatio > 0.1 && darkRatio > 0.08);
 
-        return { avgR, avgG, avgB, brightness, saturation, colorVariance, regions, totalPixels: n, darkRatio, brightnessHist, hasTranslucency };
+        // Clear cup detection: lots of gray/white (cup + background), low food-color saturation
+        const foodColorTotal = (regions.green + regions.yellow + regions.orange + regions.pink + regions.purple) / n;
+        const neutralDominant = grayRatio + whiteRatio; // gray + white as fraction
+        const isClearCup = neutralDominant > 0.35 && foodColorTotal < 0.15;
+
+        return { avgR, avgG, avgB, brightness, saturation, colorVariance, regions, totalPixels: n, darkRatio, brightnessHist, hasTranslucency, isClearCup, grayRatio, neutralDominant };
     },
 
     // Match color profile to foods - improved scoring
@@ -192,20 +199,31 @@ const FoodDatabase = {
         const wP = p('white'), dP = p('dark'), pkP = p('pink');
         const beP = p('beige'), grP = p('gray'), puP = p('purple');
 
-        // Detect drink-like images: significant dark + some color
-        const isDrinkLikely = dP > 12 || (dP > 8 && brP > 8) || (dP > 8 && rP > 5);
-        // Detect solid food plate: moderate brightness, varied colors
-        const isPlate = cp.colorVariance > 45 && cp.brightness > 80 && cp.brightness < 190;
-        // Detect light/white food
-        const isLight = wP > 30 || (wP > 20 && beP > 10);
+        // Detect drink-like images
+        const isDrinkLikely = dP > 12 || (dP > 8 && brP > 8) || (dP > 8 && rP > 5) || cp.isClearCup;
+        // Detect solid food plate: moderate brightness, varied colors, NOT a clear cup
+        const isPlate = cp.colorVariance > 45 && cp.brightness > 80 && cp.brightness < 190 && !cp.isClearCup;
+        // Detect light/white food (not when gray/white dominate from a cup)
+        const isLight = !cp.isClearCup && (wP > 30 || (wP > 20 && beP > 10));
         // Detect very green
         const isGreen = gP > 25;
+
+        // All drink keys for easy reference
+        const drinkKeys = ["soda","coffee","beer","wine","latte","milk","orange juice","smoothie","protein shake"];
 
         for (const [key, food] of Object.entries(this.foods)) {
             let score = 0;
 
             // ===== DRINKS =====
             if (isDrinkLikely) {
+                // Clear cup drinks (gray/white dominant, like Big Gulp, iced drinks)
+                if (cp.isClearCup) {
+                    if (drinkKeys.includes(key)) score += 55;
+                    // If there's some brown/dark inside the cup, lean toward soda/coffee
+                    if ((brP > 5 || dP > 5) && ["soda","coffee","latte","beer"].includes(key)) score += 15;
+                    // If very light/white inside, lean toward milk/latte/water
+                    if (wP > 25 && ["milk","latte","protein shake"].includes(key)) score += 10;
+                }
                 // Dark drinks (cola, coffee, beer)
                 if (dP > 15) {
                     if (["soda","coffee","beer","wine"].includes(key)) score += 60;
@@ -216,11 +234,15 @@ const FoodDatabase = {
                     if (["soda","coffee","latte","beer"].includes(key)) score += 55;
                 }
                 // Pink/red drinks
-                if (pkP > 8 || (rP > 8 && isDrinkLikely)) {
+                if (pkP > 8 || (rP > 8 && !cp.isClearCup)) {
                     if (["smoothie","soda","wine"].includes(key)) score += 40;
                 }
+                // Red on a clear cup is likely branding/straw, boost soda
+                if (rP > 3 && cp.isClearCup) {
+                    if (["soda"].includes(key)) score += 20;
+                }
                 // Light colored drinks
-                if (wP > 15 && isDrinkLikely && grP < 20) {
+                if (wP > 15 && grP < 20 && !cp.isClearCup) {
                     if (["milk","latte","protein shake"].includes(key)) score += 40;
                 }
                 // Orange drinks
@@ -229,11 +251,17 @@ const FoodDatabase = {
                 }
             }
 
+            // ===== Suppress solid food when drink is detected =====
+            if (isDrinkLikely && !drinkKeys.includes(key)) {
+                // Reduce any score solid foods might accumulate below
+                score -= 20;
+            }
+
             // ===== GREEN FOODS =====
-            if (isGreen) {
+            if (isGreen && !isDrinkLikely) {
                 if (["salad","broccoli","spinach","green beans","avocado"].includes(key)) score += 55;
                 if (["apple","grapes"].includes(key)) score += 20;
-            } else if (gP > 10) {
+            } else if (gP > 10 && !isDrinkLikely) {
                 if (["salad","broccoli","avocado"].includes(key)) score += 25;
             }
 
@@ -288,7 +316,7 @@ const FoodDatabase = {
             }
 
             // ===== MIXED PLATE =====
-            if (isPlate) {
+            if (isPlate && !isDrinkLikely) {
                 if (["burrito","sushi","ramen","fried rice","nachos","salad","tacos","pizza","burger","sandwich"].includes(key)) score += 15;
             }
 
