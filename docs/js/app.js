@@ -182,13 +182,13 @@ function deleteEntry(id) {
     showToast('Entry deleted');
 }
 
-function entryRowHTML(entry, showDelete) {
+function entryRowHTML(entry, showActions) {
     const iconHTML = entry.imageData
         ? `<img src="${entry.imageData}" alt="">`
         : '🍴';
     const time = entry.timestamp ? Storage.formatTime(entry.timestamp) : '';
-    const deleteBtn = showDelete
-        ? `<button class="entry-delete" onclick="deleteEntry('${entry.id}')">✕</button>`
+    const actionBtns = showActions
+        ? `<button class="entry-edit" onclick="editEntry('${entry.id}')">✎</button><button class="entry-delete" onclick="deleteEntry('${entry.id}')">✕</button>`
         : '';
 
     return `
@@ -202,27 +202,65 @@ function entryRowHTML(entry, showDelete) {
                 <span class="entry-cal-num">${entry.calories}</span>
                 <span class="entry-cal-unit">cal</span>
             </div>
-            ${deleteBtn}
+            ${actionBtns}
         </div>`;
 }
 
 // ============================================================
 // Manual Entry
 // ============================================================
+let _editingEntryId = null;
+let _baseNutrition = null; // stores per-1-serving nutrition for scaling
+
 function showManualEntry() {
+    _editingEntryId = null;
+    _baseNutrition = null;
     document.getElementById('manual-entry-modal').style.display = 'flex';
+    document.getElementById('manual-modal-title').textContent = 'Add Food';
     document.getElementById('manual-name').value = '';
     document.getElementById('manual-calories').value = '';
     document.getElementById('manual-protein').value = '';
     document.getElementById('manual-carbs').value = '';
     document.getElementById('manual-fat').value = '';
-    document.getElementById('manual-serving').value = '1 serving';
+    document.getElementById('manual-serving').value = '1';
+    document.getElementById('manual-serving-label').textContent = 'serving';
     document.getElementById('search-results').innerHTML = '';
     document.getElementById('manual-save-btn').disabled = true;
 }
 
+function editEntry(id) {
+    const entries = Storage.getAllEntries();
+    const entry = entries.find(e => e.id === id);
+    if (!entry) return;
+
+    _editingEntryId = id;
+    document.getElementById('manual-entry-modal').style.display = 'flex';
+    document.getElementById('manual-modal-title').textContent = 'Edit Food';
+    document.getElementById('manual-name').value = entry.name;
+    document.getElementById('manual-calories').value = entry.calories;
+    document.getElementById('manual-protein').value = entry.protein || '';
+    document.getElementById('manual-carbs').value = entry.carbs || '';
+    document.getElementById('manual-fat').value = entry.fat || '';
+    document.getElementById('search-results').innerHTML = '';
+    document.getElementById('manual-save-btn').disabled = false;
+
+    // Set up base nutrition for scaling
+    const servingQty = parseFloat(entry.servingQty) || 1;
+    _baseNutrition = {
+        cal: (entry.calories || 0) / servingQty,
+        protein: (entry.protein || 0) / servingQty,
+        carbs: (entry.carbs || 0) / servingQty,
+        fat: (entry.fat || 0) / servingQty,
+        unit: entry.servingUnit || 'serving'
+    };
+    document.getElementById('manual-serving').value = servingQty;
+    document.getElementById('manual-serving-label').textContent = _baseNutrition.unit;
+}
+
 function closeManualEntry() {
     document.getElementById('manual-entry-modal').style.display = 'none';
+    _editingEntryId = null;
+    _baseNutrition = null;
 }
 
 let _lastSearchResults = [];
@@ -257,9 +295,22 @@ function fillManualEntry(name, cal, protein, carbs, fat, serving) {
     document.getElementById('manual-protein').value = protein;
     document.getElementById('manual-carbs').value = carbs;
     document.getElementById('manual-fat').value = fat;
-    document.getElementById('manual-serving').value = serving;
     document.getElementById('search-results').innerHTML = '';
     document.getElementById('manual-save-btn').disabled = false;
+
+    // Store base nutrition per 1 serving for scaling
+    _baseNutrition = { cal, protein, carbs, fat, unit: serving };
+    document.getElementById('manual-serving').value = '1';
+    document.getElementById('manual-serving-label').textContent = serving;
+}
+
+function onServingChange() {
+    if (!_baseNutrition) return;
+    const qty = parseFloat(document.getElementById('manual-serving').value) || 1;
+    document.getElementById('manual-calories').value = Math.round(_baseNutrition.cal * qty);
+    document.getElementById('manual-protein').value = Math.round(_baseNutrition.protein * qty * 10) / 10;
+    document.getElementById('manual-carbs').value = Math.round(_baseNutrition.carbs * qty * 10) / 10;
+    document.getElementById('manual-fat').value = Math.round(_baseNutrition.fat * qty * 10) / 10;
 }
 
 function checkManualForm() {
@@ -269,21 +320,33 @@ function checkManualForm() {
 }
 
 function saveManualEntry() {
-    const entry = {
+    const qty = parseFloat(document.getElementById('manual-serving').value) || 1;
+    const unit = _baseNutrition ? _baseNutrition.unit : 'serving';
+    const servingDisplay = qty === 1 ? unit : qty + ' ' + unit;
+
+    const data = {
         name: document.getElementById('manual-name').value.trim(),
         calories: parseInt(document.getElementById('manual-calories').value) || 0,
         protein: parseFloat(document.getElementById('manual-protein').value) || 0,
         carbs: parseFloat(document.getElementById('manual-carbs').value) || 0,
         fat: parseFloat(document.getElementById('manual-fat').value) || 0,
-        serving: document.getElementById('manual-serving').value || '1 serving',
-        date: document.getElementById('log-date').value
+        serving: servingDisplay,
+        servingQty: qty,
+        servingUnit: unit
     };
 
-    Storage.addEntry(entry);
+    if (_editingEntryId) {
+        Storage.updateEntry(_editingEntryId, data);
+        showToast('Entry updated!');
+    } else {
+        data.date = document.getElementById('log-date').value;
+        Storage.addEntry(data);
+        showToast('Food added!');
+    }
+
     closeManualEntry();
     loadLogEntries();
     updateDashboard();
-    showToast('Food added!');
 }
 
 // ============================================================
@@ -498,13 +561,16 @@ function saveFoodResult() {
         thumbnail = compressImage(scanImageData);
     }
 
+    const serving = document.getElementById('result-serving').value || '1 serving';
     const entry = {
         name: document.getElementById('result-name').value.trim(),
         calories: parseInt(document.getElementById('result-calories').value) || 0,
         protein: parseFloat(document.getElementById('result-protein').value) || 0,
         carbs: parseFloat(document.getElementById('result-carbs').value) || 0,
         fat: parseFloat(document.getElementById('result-fat').value) || 0,
-        serving: document.getElementById('result-serving').value || '1 serving',
+        serving: serving,
+        servingQty: 1,
+        servingUnit: serving,
         imageData: thumbnail,
         date: Storage.todayStr()
     };

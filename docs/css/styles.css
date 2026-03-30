@@ -347,6 +347,21 @@ body {
     text-align: right;
 }
 
+.entry-edit {
+    background: var(--surface2);
+    border: 1px solid rgba(255,255,255,0.1);
+    color: var(--text-secondary);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    font-size: 14px;
+    cursor: pointer;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .entry-delete {
     background: var(--red);
     border: none;
@@ -360,6 +375,26 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+}
+
+.serving-input-group {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.serving-input-group input {
+    width: 60px;
+    text-align: center;
+}
+
+.serving-unit-label {
+    font-size: 13px;
+    color: var(--text-secondary);
+    max-width: 80px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 /* Empty State */

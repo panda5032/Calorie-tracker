@@ -79,6 +79,15 @@ const Storage = {
         localStorage.setItem(this.ENTRIES_KEY, JSON.stringify(entries));
     },
 
+    updateEntry(id, updates) {
+        const entries = this.getAllEntries();
+        const idx = entries.findIndex(e => e.id === id);
+        if (idx >= 0) {
+            Object.assign(entries[idx], updates);
+            localStorage.setItem(this.ENTRIES_KEY, JSON.stringify(entries));
+        }
+    },
+
     // Exercise methods
     getAllExercises() {
         const data = localStorage.getItem(this.EXERCISES_KEY);

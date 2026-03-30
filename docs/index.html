@@ -380,7 +380,7 @@
             <div class="modal-content">
                 <div class="modal-header">
                     <button class="modal-close" onclick="closeManualEntry()">Cancel</button>
-                    <h3>Add Food</h3>
+                    <h3 id="manual-modal-title">Add Food</h3>
                     <button class="modal-save" id="manual-save-btn" onclick="saveManualEntry()" disabled>Save</button>
                 </div>
                 <div class="modal-body">
@@ -408,8 +408,11 @@
                             <input type="number" id="manual-fat" placeholder="0" step="0.1">
                         </div>
                         <div class="form-row">
-                            <span>Serving Size</span>
-                            <input type="text" id="manual-serving" placeholder="1 serving" value="1 serving">
+                            <span>Servings</span>
+                            <div class="serving-input-group">
+                                <input type="number" id="manual-serving" value="1" min="0.25" step="0.25" oninput="onServingChange()">
+                                <span class="serving-unit-label" id="manual-serving-label">serving</span>
+                            </div>
                         </div>
                     </div>
                 </div>
