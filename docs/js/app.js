@@ -224,8 +224,11 @@ function closeManualEntry() {
     document.getElementById('manual-entry-modal').style.display = 'none';
 }
 
+let _lastSearchResults = [];
+
 function searchFood(query) {
     const results = FoodDatabase.search(query);
+    _lastSearchResults = results;
     const container = document.getElementById('search-results');
 
     if (results.length === 0) {
@@ -233,12 +236,18 @@ function searchFood(query) {
         return;
     }
 
-    container.innerHTML = results.map(f => `
-        <div class="search-result-item" onclick="fillManualEntry('${escapeHtml(f.name)}', ${f.cal}, ${f.protein}, ${f.carbs}, ${f.fat}, '${escapeHtml(f.serving)}')">
+    container.innerHTML = results.map((f, i) => `
+        <div class="search-result-item" onclick="pickSearchResult(${i})">
             <span>${escapeHtml(f.name)}</span>
             <span>${f.cal} cal</span>
         </div>
     `).join('');
+}
+
+function pickSearchResult(index) {
+    const f = _lastSearchResults[index];
+    if (!f) return;
+    fillManualEntry(f.name, f.cal, f.protein, f.carbs, f.fat, f.serving);
 }
 
 function fillManualEntry(name, cal, protein, carbs, fat, serving) {
@@ -435,12 +444,15 @@ Rules:
     }));
 }
 
+let _lastScanResults = [];
+
 function showScanResults(results) {
+    _lastScanResults = results;
     const resultsDiv = document.getElementById('scan-results');
     resultsDiv.querySelector('h3').textContent = 'What did we find?';
 
-    document.getElementById('scan-results-list').innerHTML = results.map(r => `
-        <div class="result-item" onclick="selectScanResult('${escapeHtml(r.name)}', ${r.cal}, ${r.protein}, ${r.carbs}, ${r.fat}, '${escapeHtml(r.serving)}')">
+    document.getElementById('scan-results-list').innerHTML = results.map((r, i) => `
+        <div class="result-item" onclick="pickScanResult(${i})">
             <div class="result-info">
                 <div class="result-name">${escapeHtml(r.name)}</div>
                 <div class="result-meta">${r.cal} cal \u00B7 ${r.serving}</div>
@@ -454,6 +466,12 @@ function showScanResults(results) {
             <button class="btn btn-text" onclick="resetScan()">\u2190 Back to Camera</button>
         </div>
     `;
+}
+
+function pickScanResult(index) {
+    const r = _lastScanResults[index];
+    if (!r) return;
+    selectScanResult(r.name, r.cal, r.protein, r.carbs, r.fat, r.serving);
 }
 
 function selectScanResult(name, cal, protein, carbs, fat, serving) {
