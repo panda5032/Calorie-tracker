@@ -32,6 +32,7 @@ function initApp() {
     loadLogEntries();
     loadExerciseEntries();
     recalcProfile();
+    loadWeightHistory();
 
     // Register service worker
     if ('serviceWorker' in navigator) {
@@ -57,7 +58,7 @@ function switchTab(tab) {
     if (tab === 'dashboard') updateDashboard();
     if (tab === 'log') loadLogEntries();
     if (tab === 'exercise') loadExerciseEntries();
-    if (tab === 'profile') recalcProfile();
+    if (tab === 'profile') { recalcProfile(); loadWeightHistory(); }
 }
 
 // ============================================================
@@ -865,6 +866,105 @@ function loadStepsForDate(dateStr) {
     const pct = Math.min(100, (steps / goal) * 100);
     document.getElementById('steps-progress-bar').style.width = pct + '%';
     document.getElementById('steps-goal-label').textContent = (steps || 0).toLocaleString() + ' / ' + goal.toLocaleString();
+}
+
+// ============================================================
+// Weight Tracker
+// ============================================================
+function saveWeightLog() {
+    const weight = parseFloat(document.getElementById('weight-log-input').value);
+    if (!weight || weight < 50 || weight > 999) {
+        showToast('Enter a valid weight');
+        return;
+    }
+
+    const dateStr = Storage.todayStr();
+    Storage.saveWeight(dateStr, weight);
+
+    // Update profile current weight
+    const profile = getProfileFromForm();
+    profile.weightLbs = weight;
+    document.getElementById('prof-weight').value = weight;
+    Storage.saveProfile(profile);
+
+    recalcProfile();
+    updateDashboard();
+    loadWeightHistory();
+    document.getElementById('weight-log-input').value = '';
+    showToast('Weight logged!');
+}
+
+function loadWeightHistory() {
+    const log = Storage.getWeightLog();
+    const container = document.getElementById('weight-history');
+
+    if (log.length === 0) {
+        container.innerHTML = '<div class="empty-state" style="padding:16px 0"><p style="font-size:13px">No weight entries yet</p></div>';
+        return;
+    }
+
+    // Show last 14 entries
+    const recent = log.slice(0, 14);
+
+    let html = '<div class="weight-history-title">Recent History</div>';
+    recent.forEach((entry, i) => {
+        const dateObj = new Date(entry.date + 'T12:00:00');
+        const dateLabel = formatWeightDate(dateObj);
+        const weight = entry.weight.toFixed(1);
+
+        // Calculate change from next (older) entry
+        let changeHtml = '';
+        if (i < recent.length - 1) {
+            const diff = entry.weight - recent[i + 1].weight;
+            if (Math.abs(diff) < 0.05) {
+                changeHtml = '<span class="weight-entry-change same">0.0</span>';
+            } else if (diff < 0) {
+                changeHtml = `<span class="weight-entry-change loss">${diff.toFixed(1)}</span>`;
+            } else {
+                changeHtml = `<span class="weight-entry-change gain">+${diff.toFixed(1)}</span>`;
+            }
+        }
+
+        html += `
+            <div class="weight-entry">
+                <span class="weight-entry-date">${dateLabel}</span>
+                <div class="weight-entry-right">
+                    ${changeHtml}
+                    <span class="weight-entry-value">${weight}</span>
+                    <button class="weight-entry-delete" onclick="deleteWeightEntry('${entry.date}')">&times;</button>
+                </div>
+            </div>`;
+    });
+
+    container.innerHTML = html;
+
+    // Pre-fill today's weight if already logged
+    const todayWeight = Storage.getWeightForDate(Storage.todayStr());
+    if (todayWeight) {
+        document.getElementById('weight-log-input').placeholder = todayWeight.toFixed(1);
+        document.getElementById('weight-date-label').textContent = 'Today (update)';
+    } else {
+        document.getElementById('weight-date-label').textContent = 'Today';
+    }
+}
+
+function deleteWeightEntry(dateStr) {
+    Storage.deleteWeight(dateStr);
+    loadWeightHistory();
+    showToast('Weight entry deleted');
+}
+
+function formatWeightDate(date) {
+    const today = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+
+    if (sameDay(date, today)) return 'Today';
+    if (sameDay(date, yesterday)) return 'Yesterday';
+
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 // ============================================================

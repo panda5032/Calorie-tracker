@@ -3,6 +3,7 @@ const Storage = {
     ENTRIES_KEY: 'ct_entries',
     EXERCISES_KEY: 'ct_exercises',
     STEPS_KEY: 'ct_steps',
+    WEIGHT_KEY: 'ct_weight_log',
     API_KEY_KEY: 'ct_api_key',
 
     getApiKey() {
@@ -129,6 +130,36 @@ const Storage = {
         const steps = this.getAllSteps();
         steps[dateStr] = count;
         localStorage.setItem(this.STEPS_KEY, JSON.stringify(steps));
+    },
+
+    // Weight log methods
+    getWeightLog() {
+        const data = localStorage.getItem(this.WEIGHT_KEY);
+        return data ? JSON.parse(data) : [];
+    },
+
+    saveWeight(dateStr, weightLbs) {
+        const log = this.getWeightLog();
+        const existing = log.findIndex(e => e.date === dateStr);
+        if (existing >= 0) {
+            log[existing].weight = weightLbs;
+        } else {
+            log.push({ date: dateStr, weight: weightLbs });
+        }
+        log.sort((a, b) => b.date.localeCompare(a.date));
+        localStorage.setItem(this.WEIGHT_KEY, JSON.stringify(log));
+    },
+
+    getWeightForDate(dateStr) {
+        const log = this.getWeightLog();
+        const entry = log.find(e => e.date === dateStr);
+        return entry ? entry.weight : null;
+    },
+
+    deleteWeight(dateStr) {
+        let log = this.getWeightLog();
+        log = log.filter(e => e.date !== dateStr);
+        localStorage.setItem(this.WEIGHT_KEY, JSON.stringify(log));
     },
 
     todayStr() {

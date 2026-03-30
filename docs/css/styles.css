@@ -1005,6 +1005,104 @@ body {
     text-align: right;
 }
 
+/* Weight Tracker */
+.weight-tracker-card {
+    margin-bottom: 12px;
+}
+
+.weight-input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.weight-input-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 14px;
+}
+
+.weight-date-label {
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.weight-history {
+    border-top: 1px solid rgba(255,255,255,0.06);
+    padding-top: 12px;
+}
+
+.weight-history-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 8px;
+}
+
+.weight-entry {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+
+.weight-entry:last-child {
+    border-bottom: none;
+}
+
+.weight-entry-date {
+    font-size: 14px;
+    color: var(--text);
+}
+
+.weight-entry-right {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.weight-entry-value {
+    font-size: 16px;
+    font-weight: 700;
+    font-feature-settings: 'tnum';
+}
+
+.weight-entry-change {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 10px;
+}
+
+.weight-entry-change.loss {
+    color: var(--green);
+    background: rgba(78, 205, 196, 0.15);
+}
+
+.weight-entry-change.gain {
+    color: var(--red);
+    background: rgba(255, 107, 107, 0.15);
+}
+
+.weight-entry-change.same {
+    color: var(--text-secondary);
+    background: rgba(255,255,255,0.06);
+}
+
+.weight-entry-delete {
+    background: none;
+    border: none;
+    color: var(--text-tertiary);
+    font-size: 16px;
+    cursor: pointer;
+    padding: 4px;
+}
+
 /* Exercise Entry Row */
 .exercise-entry-row {
     display: flex;
