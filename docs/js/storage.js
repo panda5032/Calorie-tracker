@@ -3,6 +3,15 @@ const Storage = {
     ENTRIES_KEY: 'ct_entries',
     EXERCISES_KEY: 'ct_exercises',
     STEPS_KEY: 'ct_steps',
+    API_KEY_KEY: 'ct_api_key',
+
+    getApiKey() {
+        return localStorage.getItem(this.API_KEY_KEY) || '';
+    },
+
+    saveApiKey(key) {
+        localStorage.setItem(this.API_KEY_KEY, key);
+    },
 
     getDefaultProfile() {
         const goalDate = new Date();

@@ -22,6 +22,7 @@ function initApp() {
 
     // Load profile into form
     loadProfileForm(profile);
+    loadApiKey();
 
     // Init category chips
     initCategoryChips();
@@ -307,39 +308,152 @@ function handlePhoto(event) {
     event.target.value = '';
 }
 
-function analyzeFood() {
+async function analyzeFood() {
     document.getElementById('scan-analyze').style.display = 'none';
 
-    // Show loading
     const resultsDiv = document.getElementById('scan-results');
     resultsDiv.style.display = 'block';
     resultsDiv.querySelector('h3').textContent = '';
-    document.getElementById('scan-results-list').innerHTML = `
-        <div class="loading">
-            <div class="spinner"></div>
-            <span>Analyzing food colors &amp; patterns...</span>
-        </div>`;
 
-    // Use real image color analysis
-    FoodDatabase.classifyFromImage(scanImageData).then(results => {
-        resultsDiv.querySelector('h3').textContent = 'What did we find?';
+    const apiKey = Storage.getApiKey();
 
-        document.getElementById('scan-results-list').innerHTML = results.map(r => `
-            <div class="result-item" onclick="selectScanResult('${escapeHtml(r.name)}', ${r.cal}, ${r.protein}, ${r.carbs}, ${r.fat}, '${escapeHtml(r.serving)}')">
-                <div class="result-info">
-                    <div class="result-name">${escapeHtml(r.name)}</div>
-                    <div class="result-meta">${r.cal} cal \u00B7 ${r.serving}</div>
-                </div>
-                <span class="result-confidence">${Math.round(r.confidence * 100)}%</span>
-                <span class="result-arrow">\u203A</span>
-            </div>
-        `).join('') + `
-            <div class="scan-results-actions">
-                <button class="btn btn-secondary" onclick="noneOfTheseManual()" style="width:100%">None of these \u2013 Enter Manually</button>
-                <button class="btn btn-text" onclick="resetScan()">\u2190 Back to Camera</button>
-            </div>
-        `;
+    if (apiKey) {
+        // Use Claude Vision API
+        document.getElementById('scan-results-list').innerHTML = `
+            <div class="loading">
+                <div class="spinner"></div>
+                <span>Claude AI is analyzing your food...</span>
+            </div>`;
+
+        try {
+            const results = await analyzeFoodWithClaude(scanImageData, apiKey);
+            showScanResults(results);
+        } catch (err) {
+            console.error('Claude API error:', err);
+            document.getElementById('scan-results-list').innerHTML = `
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <span>AI failed, using backup scanner...</span>
+                </div>`;
+            const results = await FoodDatabase.classifyFromImage(scanImageData);
+            showScanResults(results);
+        }
+    } else {
+        // Fallback to color-based analysis
+        document.getElementById('scan-results-list').innerHTML = `
+            <div class="loading">
+                <div class="spinner"></div>
+                <span>Analyzing food colors &amp; patterns...</span>
+            </div>`;
+
+        const results = await FoodDatabase.classifyFromImage(scanImageData);
+        showScanResults(results);
+    }
+}
+
+async function analyzeFoodWithClaude(imageData, apiKey) {
+    // Extract base64 and media type from data URL
+    const match = imageData.match(/^data:(image\/\w+);base64,(.+)$/);
+    if (!match) throw new Error('Invalid image data');
+
+    const mediaType = match[1];
+    const base64Data = match[2];
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+            'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001',
+            max_tokens: 1024,
+            messages: [{
+                role: 'user',
+                content: [
+                    {
+                        type: 'image',
+                        source: {
+                            type: 'base64',
+                            media_type: mediaType,
+                            data: base64Data
+                        }
+                    },
+                    {
+                        type: 'text',
+                        text: `Identify the food(s) in this photo. For each distinct food item, estimate the nutritional information per typical serving.
+
+Respond ONLY with a JSON array (no markdown, no explanation). Each item must have exactly these fields:
+[
+  {
+    "name": "Food Name",
+    "calories": 250,
+    "protein": 12,
+    "carbs": 30,
+    "fat": 8,
+    "serving": "1 cup",
+    "confidence": 0.85
+  }
+]
+
+Rules:
+- Return 1-5 food items found in the photo
+- Calories, protein, carbs, fat should be numbers (not strings)
+- Confidence is 0.0-1.0 based on how sure you are
+- If you can't identify any food, return: [{"name":"Unknown Food","calories":200,"protein":10,"carbs":25,"fat":8,"serving":"1 serving","confidence":0.3}]`
+                    }
+                ]
+            }]
+        })
     });
+
+    if (!response.ok) {
+        const errBody = await response.text();
+        throw new Error(`API ${response.status}: ${errBody}`);
+    }
+
+    const data = await response.json();
+    const text = data.content[0].text.trim();
+
+    // Parse JSON from response (handle potential markdown wrapping)
+    let jsonStr = text;
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) jsonStr = jsonMatch[0];
+
+    const items = JSON.parse(jsonStr);
+
+    return items.map(item => ({
+        name: item.name || 'Unknown Food',
+        cal: parseInt(item.calories) || 200,
+        protein: parseFloat(item.protein) || 0,
+        carbs: parseFloat(item.carbs) || 0,
+        fat: parseFloat(item.fat) || 0,
+        serving: item.serving || '1 serving',
+        confidence: parseFloat(item.confidence) || 0.5
+    }));
+}
+
+function showScanResults(results) {
+    const resultsDiv = document.getElementById('scan-results');
+    resultsDiv.querySelector('h3').textContent = 'What did we find?';
+
+    document.getElementById('scan-results-list').innerHTML = results.map(r => `
+        <div class="result-item" onclick="selectScanResult('${escapeHtml(r.name)}', ${r.cal}, ${r.protein}, ${r.carbs}, ${r.fat}, '${escapeHtml(r.serving)}')">
+            <div class="result-info">
+                <div class="result-name">${escapeHtml(r.name)}</div>
+                <div class="result-meta">${r.cal} cal \u00B7 ${r.serving}</div>
+            </div>
+            <span class="result-confidence">${Math.round(r.confidence * 100)}%</span>
+            <span class="result-arrow">\u203A</span>
+        </div>
+    `).join('') + `
+        <div class="scan-results-actions">
+            <button class="btn btn-secondary" onclick="noneOfTheseManual()" style="width:100%">None of these \u2013 Enter Manually</button>
+            <button class="btn btn-text" onclick="resetScan()">\u2190 Back to Camera</button>
+        </div>
+    `;
 }
 
 function selectScanResult(name, cal, protein, carbs, fat, serving) {
@@ -489,6 +603,17 @@ function saveProfile() {
     recalcProfile();
     updateDashboard();
     showToast('Profile saved!');
+}
+
+function saveApiKey() {
+    const key = document.getElementById('prof-api-key').value.trim();
+    Storage.saveApiKey(key);
+    showToast(key ? 'API key saved! AI scanner enabled.' : 'API key removed. Using basic scanner.');
+}
+
+function loadApiKey() {
+    const key = Storage.getApiKey();
+    document.getElementById('prof-api-key').value = key;
 }
 
 // ============================================================

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'calorie-tracker-v13';
+const CACHE_NAME = 'calorie-tracker-v14';
 const ASSETS = [
     './',
     './index.html',
@@ -36,6 +36,12 @@ self.addEventListener('activate', event => {
 
 // Fetch: NETWORK-FIRST — always try to get latest, fall back to cache offline
 self.addEventListener('fetch', event => {
+    // Don't cache external API calls
+    if (event.request.url.includes('api.anthropic.com')) {
+        event.respondWith(fetch(event.request));
+        return;
+    }
+
     event.respondWith(
         fetch(event.request)
             .then(response => {

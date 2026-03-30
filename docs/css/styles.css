@@ -564,6 +564,13 @@ body {
 }
 
 /* Profile */
+.form-hint {
+    font-size: 13px;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-bottom: 12px;
+}
+
 .form-row {
     display: flex;
     justify-content: space-between;

@@ -345,6 +345,16 @@
                     </div>
                 </div>
 
+                <div class="card">
+                    <h3>AI Food Scanner</h3>
+                    <p class="form-hint">Add your Anthropic API key to use Claude AI for accurate food photo analysis. Without a key, the basic color-based scanner is used.</p>
+                    <div class="form-row">
+                        <label>API Key</label>
+                        <input type="password" id="prof-api-key" placeholder="sk-ant-..." style="width:180px">
+                    </div>
+                    <button class="btn btn-secondary" onclick="saveApiKey()" style="margin-top:8px;width:100%">Save API Key</button>
+                </div>
+
                 <button class="btn btn-primary" onclick="saveProfile()" style="margin:16px">Save Changes</button>
             </div>
         </div>
