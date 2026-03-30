@@ -878,130 +878,174 @@ const FoodDatabase = {
         const wP = p('white'), dP = p('dark'), pkP = p('pink');
         const beP = p('beige'), grP = p('gray'), puP = p('purple');
 
-        // Detect drink-like images
-        const isDrinkLikely = dP > 12 || (dP > 8 && brP > 8) || (dP > 8 && rP > 5) || cp.isClearCup;
-        // Detect solid food plate: moderate brightness, varied colors, NOT a clear cup
-        const isPlate = cp.colorVariance > 45 && cp.brightness > 80 && cp.brightness < 190 && !cp.isClearCup;
-        // Detect light/white food (not when gray/white dominate from a cup)
-        const isLight = !cp.isClearCup && (wP > 30 || (wP > 20 && beP > 10));
-        // Detect very green
+        // Count how many food-relevant colors are significant (>5%)
+        const foodColors = [gP, brP, rP, yP, oP, pkP, beP].filter(v => v > 5).length;
+        // Total percentage of colorful (non-neutral) pixels
+        const colorfulPct = gP + brP + rP + yP + oP + pkP + puP;
+
+        // Drink detection: ONLY when image is dominated by neutral/dark with very few food colors
+        // A plate of food in a dim restaurant has multiple food colors; a drink does not
+        const isDrinkOnly = cp.isClearCup ||
+            (dP > 30 && colorfulPct < 10) ||
+            (dP > 20 && foodColors <= 1 && colorfulPct < 15) ||
+            (grP > 40 && colorfulPct < 8);
+
+        const isPlate = foodColors >= 2 && cp.colorVariance > 35;
+        const isLight = wP > 30 || (wP > 20 && beP > 10);
         const isGreen = gP > 25;
 
-        // All drink keys for easy reference
-        const drinkKeys = ["soda","coffee","beer","wine","latte","milk","orange juice","smoothie","protein shake"];
+        // Tag each food with broad categories for smarter matching
+        const tags = {
+            // Drinks
+            "soda": "drink", "coffee": "drink", "beer": "drink", "wine": "drink", "latte": "drink",
+            "milk": "drink", "orange juice": "drink", "smoothie": "drink", "protein shake": "drink",
+            "sparkling water": "drink", "water": "drink", "diet soda": "drink", "iced tea": "drink",
+            "unsweetened tea": "drink", "energy drink": "drink", "sports drink": "drink",
+            "hot chocolate": "drink", "cappuccino": "drink", "mocha": "drink", "iced coffee": "drink",
+            "frappuccino": "drink", "lemonade": "drink", "apple juice": "drink", "cranberry juice": "drink",
+            "coconut water": "drink", "coca cola": "drink", "diet coke": "drink", "coke zero": "drink",
+            "pepsi": "drink", "diet pepsi": "drink", "sprite": "drink", "dr pepper": "drink",
+            "mountain dew": "drink", "fanta": "drink", "root beer": "drink", "gatorade": "drink",
+            "powerade": "drink", "red bull": "drink", "monster energy": "drink", "celsius": "drink",
+            "lacroix": "drink", "perrier": "drink", "topo chico": "drink", "boba tea": "drink",
+            "bubble tea": "drink", "chocolate milk": "drink", "almond milk": "drink", "oat milk": "drink",
+            "kombucha": "drink", "hard seltzer": "drink", "margarita": "drink", "cocktail": "drink",
+            "starbucks latte": "drink", "starbucks frappuccino": "drink", "starbucks cold brew": "drink",
+            "starbucks pink drink": "drink", "dunkin iced coffee": "drink", "dunkin latte": "drink",
+            // Mexican
+            "nachos": "mexican", "tortilla chips": "mexican", "chips": "mexican-snack", "salsa": "mexican",
+            "tacos": "mexican", "burrito": "mexican", "quesadilla": "mexican", "enchilada": "mexican",
+            "tamale": "mexican", "taco salad": "mexican", "guacamole": "mexican", "elote": "mexican",
+            "carne asada": "mexican", "carnitas": "mexican", "al pastor": "mexican", "birria tacos": "mexican",
+            "chalupa": "mexican", "crunchwrap": "mexican", "fish tacos": "mexican",
+            "taco bell crunchy taco": "mexican", "taco bell soft taco": "mexican", "taco bell crunchwrap": "mexican",
+            "taco bell burrito supreme": "mexican", "taco bell chalupa": "mexican", "taco bell quesadilla": "mexican",
+            "taco bell mexican pizza": "mexican", "taco bell nachos bellgrande": "mexican",
+            "taco bell bean burrito": "mexican", "chipotle burrito bowl": "mexican", "chipotle burrito": "mexican",
+            "chipotle chicken bowl": "mexican", "chipotle steak bowl": "mexican", "chipotle tacos": "mexican",
+            "chipotle chips guac": "mexican", "tortilla": "mexican",
+            // Brown/fried
+            "fried chicken": "brown-fried", "chicken wings": "brown-fried", "french fries": "brown-fried",
+            "chicken nuggets": "brown-fried", "chicken tender": "brown-fried", "onion rings": "brown-fried",
+            "mozzarella sticks": "brown-fried", "tater tots": "brown-fried", "corn dog": "brown-fried",
+            "fried rice": "brown-fried", "hash browns": "brown-fried",
+            // Yellow/cheesy
+            "mac and cheese": "yellow", "cheese": "yellow", "eggs": "yellow", "corn": "yellow",
+            "scrambled eggs": "yellow", "omelet": "yellow",
+            // Red/saucy
+            "pizza": "red-saucy", "spaghetti": "red-saucy", "lasagna": "red-saucy", "ramen": "red-saucy",
+            "soup": "red-saucy", "chili": "red-saucy", "tomato soup": "red-saucy",
+        };
 
         for (const [key, food] of Object.entries(this.foods)) {
             let score = 0;
+            const tag = tags[key] || "";
+            const isDrink = tag === "drink";
+            const isMexican = tag === "mexican" || tag === "mexican-snack";
 
-            // ===== DRINKS =====
-            if (isDrinkLikely) {
-                // Clear cup drinks (gray/white dominant, like Big Gulp, iced drinks)
-                if (cp.isClearCup) {
-                    if (drinkKeys.includes(key)) score += 55;
-                    // If there's some brown/dark inside the cup, lean toward soda/coffee
-                    if ((brP > 5 || dP > 5) && ["soda","coffee","latte","beer"].includes(key)) score += 15;
-                    // If very light/white inside, lean toward milk/latte/water
-                    if (wP > 25 && ["milk","latte","protein shake"].includes(key)) score += 10;
-                }
-                // Dark drinks (cola, coffee, beer)
-                if (dP > 15) {
-                    if (["soda","coffee","beer","wine"].includes(key)) score += 60;
-                    if (["chocolate","blueberries"].includes(key)) score += 15;
-                }
-                // Dark + brown (coffee, cola with caramel)
-                if (dP > 8 && brP > 8) {
-                    if (["soda","coffee","latte","beer"].includes(key)) score += 55;
-                }
-                // Pink/red drinks
-                if (pkP > 8 || (rP > 8 && !cp.isClearCup)) {
-                    if (["smoothie","soda","wine"].includes(key)) score += 40;
-                }
-                // Red on a clear cup is likely branding/straw, boost soda
-                if (rP > 3 && cp.isClearCup) {
-                    if (["soda"].includes(key)) score += 20;
-                }
-                // Light colored drinks
-                if (wP > 15 && grP < 20 && !cp.isClearCup) {
-                    if (["milk","latte","protein shake"].includes(key)) score += 40;
-                }
-                // Orange drinks
-                if (oP > 10) {
-                    if (["orange juice","smoothie"].includes(key)) score += 45;
-                }
+            // ===== DRINK-ONLY images (neutral/dark dominated, very few food colors) =====
+            if (isDrinkOnly && isDrink) {
+                score += 50;
+                if (dP > 20 && ["soda","coffee","beer","wine","coca cola","pepsi","dr pepper"].includes(key)) score += 20;
+                if (cp.isClearCup) score += 10;
             }
 
-            // ===== Suppress solid food when drink is detected =====
-            if (isDrinkLikely && !drinkKeys.includes(key)) {
-                // Reduce any score solid foods might accumulate below
-                score -= 20;
+            // ===== PLATE OF FOOD (multiple food colors present) =====
+            // When we see a mix of colors, score food items, NOT drinks
+
+            // Yellow + Brown = chips, fried food, Mexican food
+            if (yP > 8 && brP > 8) {
+                if (isMexican) score += 55;
+                if (["chips","nachos","french fries","tortilla chips","fried rice","fried chicken"].includes(key)) score += 50;
+                if (tag === "brown-fried") score += 40;
+                if (tag === "yellow") score += 35;
+            } else if (yP > 8 || (beP > 10 && brP > 8)) {
+                if (isMexican) score += 30;
+                if (tag === "brown-fried" || tag === "yellow") score += 25;
             }
 
-            // ===== GREEN FOODS =====
-            if (isGreen && !isDrinkLikely) {
-                if (["salad","broccoli","spinach","green beans","avocado"].includes(key)) score += 55;
-                if (["apple","grapes"].includes(key)) score += 20;
-            } else if (gP > 10 && !isDrinkLikely) {
-                if (["salad","broccoli","avocado"].includes(key)) score += 25;
+            // Yellow/Brown + Red = chips & salsa, Mexican food, pizza
+            if ((yP > 5 || brP > 10) && rP > 5) {
+                if (isMexican) score += 45;
+                if (["salsa","nachos","pizza","tacos","burrito","chili","spaghetti","lasagna"].includes(key)) score += 40;
+                if (tag === "red-saucy") score += 30;
             }
 
-            // ===== BROWN FOODS (meats, bread, baked goods) =====
-            if (brP > 20 && !isDrinkLikely) {
-                if (["steak","grilled chicken breast","fried chicken","burger"].includes(key)) score += 50;
-                if (["bread","bagel","muffin","cookie","donut"].includes(key)) score += 40;
-                if (["pancakes","waffle","granola bar","oatmeal"].includes(key)) score += 30;
-                if (["chocolate","peanut butter","almonds"].includes(key)) score += 20;
-            } else if (brP > 10 && !isDrinkLikely) {
-                if (["grilled chicken breast","bread","pasta","rice"].includes(key)) score += 20;
-                if (["cookie","donut","muffin"].includes(key)) score += 15;
+            // Green dominant
+            if (isGreen) {
+                if (["salad","broccoli","spinach","green beans","avocado","caesar salad","grilled chicken salad","kale"].includes(key)) score += 55;
+                if (gP > 15 && isMexican) score += 20; // green table/plate at Mexican restaurant
+            } else if (gP > 10) {
+                if (["salad","broccoli","avocado","stir fry"].includes(key)) score += 25;
+                // Green + yellow/brown/red = could be Mexican (green salsa, table)
+                if (gP > 8 && (yP > 5 || brP > 5) && isMexican) score += 25;
             }
 
-            // ===== RED FOODS =====
-            if (rP > 15 && !isDrinkLikely) {
+            // Brown dominant (meats, bread, baked goods)
+            if (brP > 20 && !isDrinkOnly) {
+                if (["steak","grilled chicken breast","fried chicken","burger","pork chop","ribs","brisket"].includes(key)) score += 50;
+                if (["bread","bagel","muffin","cookie","donut","croissant","brownie"].includes(key)) score += 40;
+                if (tag === "brown-fried") score += 45;
+                if (["pancakes","waffle","granola bar","oatmeal","meatloaf","chicken thigh"].includes(key)) score += 30;
+                if (isMexican) score += 25;
+            } else if (brP > 10 && !isDrinkOnly) {
+                if (["grilled chicken breast","bread","pasta","rice","chicken thigh"].includes(key)) score += 20;
+                if (tag === "brown-fried") score += 20;
+                if (isMexican) score += 15;
+            }
+
+            // Red dominant
+            if (rP > 15 && !isDrinkOnly) {
                 if (["pizza","tacos","ramen","strawberries","watermelon"].includes(key)) score += 50;
+                if (tag === "red-saucy") score += 45;
                 if (["steak","burger","hot dog","bacon"].includes(key)) score += 35;
-                if (["nachos","burrito","soup"].includes(key)) score += 25;
-            } else if (rP > 8 && !isDrinkLikely) {
+                if (isMexican) score += 35;
+            } else if (rP > 8 && !isDrinkOnly) {
+                if (tag === "red-saucy") score += 25;
+                if (isMexican) score += 20;
                 if (["pizza","tacos","burger"].includes(key)) score += 20;
             }
 
-            // ===== YELLOW/ORANGE FOODS =====
-            if ((yP > 12 || oP > 12) && !isDrinkLikely) {
-                if (["mac and cheese","cheese","french fries","chips","nachos","corn"].includes(key)) score += 50;
-                if (["eggs","pancakes","fried rice","orange","mango"].includes(key)) score += 35;
-                if (["banana","cereal"].includes(key)) score += 25;
+            // Yellow/Orange dominant
+            if ((yP > 12 || oP > 12) && !isDrinkOnly) {
+                if (tag === "yellow") score += 50;
+                if (["mac and cheese","cheese","french fries","chips","nachos","corn","tortilla chips"].includes(key)) score += 50;
+                if (isMexican) score += 35;
+                if (["eggs","pancakes","fried rice","orange","mango","scrambled eggs","omelet"].includes(key)) score += 35;
             }
 
-            // ===== WHITE/LIGHT FOODS =====
-            if (isLight && !isDrinkLikely) {
-                if (["rice","yogurt","tofu","bread","potato"].includes(key)) score += 45;
-                if (["pasta","ice cream","cereal","oatmeal"].includes(key)) score += 30;
+            // White/Light
+            if (isLight && !isDrinkOnly) {
+                if (["rice","yogurt","tofu","bread","potato","mashed potatoes","pasta"].includes(key)) score += 45;
+                if (["ice cream","cereal","oatmeal","cottage cheese"].includes(key)) score += 30;
             }
 
-            // ===== DARK SOLID FOODS (not drinks) =====
-            if (dP > 20 && !isDrinkLikely && cp.colorVariance > 40) {
-                if (["chocolate","blueberries","steak"].includes(key)) score += 35;
+            // Pink
+            if (pkP > 10 && !isDrinkOnly) {
+                if (["salmon","shrimp","sashimi"].includes(key)) score += 50;
+                if (["ice cream","yogurt","watermelon","smoothie bowl"].includes(key)) score += 25;
             }
 
-            // ===== PINK FOODS =====
-            if (pkP > 10 && !isDrinkLikely) {
-                if (["salmon","shrimp"].includes(key)) score += 50;
-                if (["ice cream","yogurt","watermelon"].includes(key)) score += 25;
+            // Beige (bread-like, grains)
+            if (beP > 15 && !isDrinkOnly) {
+                if (["bread","rice","pasta","oatmeal","potato","cereal","bagel","tortilla","naan","pita"].includes(key)) score += 30;
+                if (isMexican) score += 20;
             }
 
-            // ===== BEIGE (bread-like, grains) =====
-            if (beP > 15 && !isDrinkLikely) {
-                if (["bread","rice","pasta","oatmeal","potato","cereal","bagel"].includes(key)) score += 30;
-                if (["pancakes","waffle","tortilla"].includes(key)) score += 20;
+            // Mixed plate bonus — when image has varied colors, favor meal items
+            if (isPlate) {
+                if (isMexican) score += 15;
+                if (["burrito","sushi","ramen","fried rice","nachos","salad","tacos","pizza","burger","sandwich",
+                     "stir fry","pad thai","bibimbap","poke bowl","curry","skillet"].includes(key)) score += 15;
             }
 
-            // ===== MIXED PLATE =====
-            if (isPlate && !isDrinkLikely) {
-                if (["burrito","sushi","ramen","fried rice","nachos","salad","tacos","pizza","burger","sandwich"].includes(key)) score += 15;
+            // Dark scenes with food colors = dim restaurant, not a drink
+            if (dP > 10 && foodColors >= 2 && isDrink) {
+                score -= 30; // suppress drinks when food colors are clearly present
             }
 
             // Only add if score > 0
             if (score > 0) {
-                // Small randomization (±5%)
                 score *= (0.95 + Math.random() * 0.10);
                 scored.push({ key, food, score });
             }
