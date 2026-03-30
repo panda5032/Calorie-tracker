@@ -225,11 +225,13 @@ function entryRowHTML(entry, showActions) {
 // Manual Entry
 // ============================================================
 let _editingEntryId = null;
-let _baseNutrition = null; // stores per-1-serving nutrition for scaling
+let _baseNutrition = null;
+let _manualEntryFromScan = false; // stores per-1-serving nutrition for scaling
 
 function showManualEntry() {
     _editingEntryId = null;
     _baseNutrition = null;
+    _manualEntryFromScan = false;
     document.getElementById('manual-entry-modal').style.display = 'flex';
     document.getElementById('manual-modal-title').textContent = 'Add Food';
     document.getElementById('manual-name').value = '';
@@ -274,8 +276,12 @@ function editEntry(id) {
 
 function closeManualEntry() {
     document.getElementById('manual-entry-modal').style.display = 'none';
+    if (_manualEntryFromScan) {
+        resetScan();
+    }
     _editingEntryId = null;
     _baseNutrition = null;
+    _manualEntryFromScan = false;
 }
 
 let _lastSearchResults = [];
@@ -354,7 +360,7 @@ function saveManualEntry() {
         Storage.updateEntry(_editingEntryId, data);
         showToast('Entry updated!');
     } else {
-        data.date = document.getElementById('log-date').value;
+        data.date = _manualEntryFromScan ? Storage.todayStr() : document.getElementById('log-date').value;
         Storage.addEntry(data);
         showToast('Food added!');
     }
@@ -601,6 +607,7 @@ function noneOfTheseManual() {
     // Open manual entry modal so user can type in their food
     document.getElementById('scan-results').style.display = 'none';
     showManualEntry();
+    _manualEntryFromScan = true;
 }
 
 function resetScan() {
