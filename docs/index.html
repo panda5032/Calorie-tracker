@@ -98,6 +98,28 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="card trends-card">
+                    <h3>Trends</h3>
+                    <div class="trends-period-row">
+                        <button class="trends-period-btn active" onclick="setTrendPeriod(7)">7D</button>
+                        <button class="trends-period-btn" onclick="setTrendPeriod(14)">14D</button>
+                        <button class="trends-period-btn" onclick="setTrendPeriod(30)">30D</button>
+                    </div>
+                    <div class="trends-chart-section">
+                        <div class="trends-chart-label">Weight (lbs)</div>
+                        <div class="trends-canvas-wrap">
+                            <canvas id="weight-chart" height="150"></canvas>
+                        </div>
+                    </div>
+                    <div class="trends-chart-section">
+                        <div class="trends-chart-label">Net Calories</div>
+                        <div class="trends-canvas-wrap">
+                            <canvas id="calorie-chart" height="150"></canvas>
+                        </div>
+                    </div>
+                    <div class="trends-summary" id="trends-summary"></div>
+                </div>
             </div>
         </div>
 

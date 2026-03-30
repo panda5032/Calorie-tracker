@@ -1040,6 +1040,96 @@ body {
     text-align: right;
 }
 
+/* Trends */
+.trends-card h3 {
+    margin-bottom: 8px;
+}
+
+.trends-period-row {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 16px;
+}
+
+.trends-period-btn {
+    flex: 1;
+    padding: 8px 0;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    background: var(--surface2);
+    color: var(--text-secondary);
+    font-size: 13px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.trends-period-btn.active {
+    background: var(--accent-light);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.trends-chart-section {
+    margin-bottom: 16px;
+}
+
+.trends-chart-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+}
+
+.trends-canvas-wrap {
+    background: var(--surface2);
+    border-radius: var(--radius-sm);
+    padding: 12px 8px 8px;
+    overflow: hidden;
+}
+
+.trends-canvas-wrap canvas {
+    width: 100%;
+    display: block;
+}
+
+.trends-summary {
+    display: flex;
+    gap: 8px;
+}
+
+.trend-stat {
+    flex: 1;
+    text-align: center;
+    padding: 10px 4px;
+    background: var(--surface2);
+    border-radius: var(--radius-sm);
+}
+
+.trend-stat-value {
+    display: block;
+    font-size: 18px;
+    font-weight: 700;
+    font-feature-settings: 'tnum';
+    margin-bottom: 2px;
+}
+
+.trend-stat-value.positive {
+    color: var(--green);
+}
+
+.trend-stat-value.negative {
+    color: var(--red);
+}
+
+.trend-stat-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+}
+
 /* Weight Tracker */
 .weight-tracker-card {
     margin-bottom: 12px;

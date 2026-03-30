@@ -1,3 +1,15 @@
+// roundRect polyfill for older Safari
+if (!CanvasRenderingContext2D.prototype.roundRect) {
+    CanvasRenderingContext2D.prototype.roundRect = function(x, y, w, h, r) {
+        r = typeof r === 'number' ? r : (r && r[0]) || 0;
+        this.moveTo(x + r, y);
+        this.arcTo(x + w, y, x + w, y + h, r);
+        this.arcTo(x + w, y + h, x, y + h, r);
+        this.arcTo(x, y + h, x, y, r);
+        this.arcTo(x, y, x + w, y, r);
+    };
+}
+
 // ============================================================
 // App State
 // ============================================================
@@ -142,6 +154,9 @@ function updateDashboard() {
     } else {
         container.innerHTML = entries.map(e => entryRowHTML(e, false)).join('');
     }
+
+    // Render trends charts
+    renderTrends();
 }
 
 // ============================================================
@@ -932,6 +947,317 @@ function loadStepsForDate(dateStr) {
     const pct = Math.min(100, (steps / goal) * 100);
     document.getElementById('steps-progress-bar').style.width = pct + '%';
     document.getElementById('steps-goal-label').textContent = (steps || 0).toLocaleString() + ' / ' + goal.toLocaleString();
+}
+
+// ============================================================
+// Trends / Analysis
+// ============================================================
+let _trendPeriod = 7;
+
+function setTrendPeriod(days) {
+    _trendPeriod = days;
+    document.querySelectorAll('.trends-period-btn').forEach(btn => btn.classList.remove('active'));
+    event.target.classList.add('active');
+    renderTrends();
+}
+
+function renderTrends() {
+    const days = _trendPeriod;
+    const profile = Storage.getProfile();
+    const calc = CalorieCalculator.computeAll(profile);
+    const dates = [];
+    const today = new Date();
+
+    for (let i = days - 1; i >= 0; i--) {
+        const d = new Date(today);
+        d.setDate(d.getDate() - i);
+        dates.push(d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'));
+    }
+
+    // Gather weight data
+    const weightLog = Storage.getWeightLog();
+    const weightMap = {};
+    weightLog.forEach(e => { weightMap[e.date] = e.weight; });
+
+    const weightData = [];
+    let lastWeight = null;
+    // Find most recent weight before the period starts for interpolation
+    for (const e of weightLog) {
+        if (e.date <= dates[0]) { lastWeight = e.weight; break; }
+    }
+    dates.forEach(date => {
+        if (weightMap[date] !== undefined) {
+            lastWeight = weightMap[date];
+            weightData.push(lastWeight);
+        } else {
+            weightData.push(lastWeight); // carry forward or null
+        }
+    });
+
+    // Gather net calorie data
+    const allEntries = Storage.getAllEntries();
+    const allExercises = Storage.getAllExercises();
+    const allSteps = Storage.getAllSteps();
+
+    const netCalData = dates.map(date => {
+        const dayEntries = allEntries.filter(e => e.date === date);
+        const dayExercises = allExercises.filter(e => e.date === date);
+        const daySteps = allSteps[date] || 0;
+
+        const consumed = dayEntries.reduce((s, e) => s + (e.calories || 0), 0);
+        const exerciseBurned = dayExercises.reduce((s, e) => s + (e.caloriesBurned || 0), 0);
+        const stepCal = calcStepCalories(daySteps, profile.weightLbs);
+        const totalBurned = exerciseBurned + stepCal;
+
+        // Only count days with any data
+        if (consumed === 0 && totalBurned === 0) return null;
+        return consumed - totalBurned;
+    });
+
+    // Draw charts
+    drawWeightChart(dates, weightData);
+    drawCalorieChart(dates, netCalData, calc.dailyTarget);
+
+    // Summary stats
+    renderTrendsSummary(weightData, netCalData, calc.dailyTarget);
+}
+
+function drawWeightChart(dates, data) {
+    const canvas = document.getElementById('weight-chart');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = (rect.width - 16) * dpr;
+    canvas.height = 150 * dpr;
+    canvas.style.height = '150px';
+    ctx.scale(dpr, dpr);
+    const W = rect.width - 16;
+    const H = 150;
+    ctx.clearRect(0, 0, W, H);
+
+    const validData = data.filter(v => v !== null);
+    if (validData.length < 1) {
+        ctx.fillStyle = '#8888a8';
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('No weight data yet', W / 2, H / 2);
+        return;
+    }
+
+    const padL = 40, padR = 10, padT = 15, padB = 30;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+
+    const min = Math.min(...validData) - 1;
+    const max = Math.max(...validData) + 1;
+    const range = max - min || 1;
+
+    // Y-axis grid lines
+    const ySteps = 4;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#8888a8';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= ySteps; i++) {
+        const val = min + (range * i / ySteps);
+        const y = padT + chartH - (chartH * i / ySteps);
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(W - padR, y);
+        ctx.stroke();
+        ctx.fillText(val.toFixed(0), padL - 5, y + 3);
+    }
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#5a5a78';
+    const labelInterval = Math.ceil(dates.length / 6);
+    dates.forEach((date, i) => {
+        if (i % labelInterval === 0 || i === dates.length - 1) {
+            const x = padL + (i / (dates.length - 1)) * chartW;
+            const d = new Date(date + 'T12:00:00');
+            ctx.fillText((d.getMonth() + 1) + '/' + d.getDate(), x, H - 5);
+        }
+    });
+
+    // Line
+    const points = [];
+    data.forEach((v, i) => {
+        if (v === null) return;
+        const x = padL + (i / (dates.length - 1)) * chartW;
+        const y = padT + chartH - ((v - min) / range) * chartH;
+        points.push({ x, y });
+    });
+
+    if (points.length > 1) {
+        // Gradient fill
+        const gradient = ctx.createLinearGradient(0, padT, 0, padT + chartH);
+        gradient.addColorStop(0, 'rgba(255, 140, 66, 0.3)');
+        gradient.addColorStop(1, 'rgba(255, 140, 66, 0.0)');
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, padT + chartH);
+        points.forEach(p => ctx.lineTo(p.x, p.y));
+        ctx.lineTo(points[points.length - 1].x, padT + chartH);
+        ctx.closePath();
+        ctx.fillStyle = gradient;
+        ctx.fill();
+
+        // Line
+        ctx.beginPath();
+        ctx.moveTo(points[0].x, points[0].y);
+        for (let i = 1; i < points.length; i++) {
+            ctx.lineTo(points[i].x, points[i].y);
+        }
+        ctx.strokeStyle = '#ff8c42';
+        ctx.lineWidth = 2.5;
+        ctx.lineJoin = 'round';
+        ctx.stroke();
+    }
+
+    // Dots
+    points.forEach(p => {
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3.5, 0, Math.PI * 2);
+        ctx.fillStyle = '#ff8c42';
+        ctx.fill();
+        ctx.strokeStyle = '#1a1a2e';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+    });
+}
+
+function drawCalorieChart(dates, data, target) {
+    const canvas = document.getElementById('calorie-chart');
+    const ctx = canvas.getContext('2d');
+    const dpr = window.devicePixelRatio || 1;
+    const rect = canvas.parentElement.getBoundingClientRect();
+    canvas.width = (rect.width - 16) * dpr;
+    canvas.height = 150 * dpr;
+    canvas.style.height = '150px';
+    ctx.scale(dpr, dpr);
+    const W = rect.width - 16;
+    const H = 150;
+    ctx.clearRect(0, 0, W, H);
+
+    const validData = data.filter(v => v !== null);
+    if (validData.length < 1) {
+        ctx.fillStyle = '#8888a8';
+        ctx.font = '13px -apple-system, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('No calorie data yet', W / 2, H / 2);
+        return;
+    }
+
+    const padL = 45, padR = 10, padT = 15, padB = 30;
+    const chartW = W - padL - padR;
+    const chartH = H - padT - padB;
+
+    const allVals = [...validData, target];
+    const min = Math.min(0, Math.min(...allVals)) - 100;
+    const max = Math.max(...allVals) + 200;
+    const range = max - min || 1;
+
+    // Y-axis grid
+    const ySteps = 4;
+    ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+    ctx.lineWidth = 1;
+    ctx.fillStyle = '#8888a8';
+    ctx.font = '10px -apple-system, sans-serif';
+    ctx.textAlign = 'right';
+    for (let i = 0; i <= ySteps; i++) {
+        const val = min + (range * i / ySteps);
+        const y = padT + chartH - (chartH * i / ySteps);
+        ctx.beginPath();
+        ctx.moveTo(padL, y);
+        ctx.lineTo(W - padR, y);
+        ctx.stroke();
+        ctx.fillText(Math.round(val).toLocaleString(), padL - 5, y + 3);
+    }
+
+    // Target line
+    const targetY = padT + chartH - ((target - min) / range) * chartH;
+    ctx.strokeStyle = 'rgba(78, 205, 196, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(padL, targetY);
+    ctx.lineTo(W - padR, targetY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#4ecdc4';
+    ctx.font = '9px -apple-system, sans-serif';
+    ctx.textAlign = 'left';
+    ctx.fillText('Target', padL + 4, targetY - 4);
+
+    // X-axis labels
+    ctx.textAlign = 'center';
+    ctx.fillStyle = '#5a5a78';
+    const labelInterval = Math.ceil(dates.length / 6);
+    dates.forEach((date, i) => {
+        if (i % labelInterval === 0 || i === dates.length - 1) {
+            const x = padL + (i / Math.max(dates.length - 1, 1)) * chartW;
+            const d = new Date(date + 'T12:00:00');
+            ctx.fillText((d.getMonth() + 1) + '/' + d.getDate(), x, H - 5);
+        }
+    });
+
+    // Bars
+    const barWidth = Math.max(4, Math.min(20, (chartW / dates.length) * 0.6));
+    const zeroY = padT + chartH - ((0 - min) / range) * chartH;
+
+    dates.forEach((date, i) => {
+        const val = data[i];
+        if (val === null) return;
+        const x = padL + (i / Math.max(dates.length - 1, 1)) * chartW;
+        const valY = padT + chartH - ((val - min) / range) * chartH;
+
+        const isOver = val > target;
+        ctx.fillStyle = isOver ? 'rgba(255, 107, 107, 0.7)' : 'rgba(78, 205, 196, 0.7)';
+        const barTop = Math.min(valY, zeroY);
+        const barH = Math.abs(valY - zeroY);
+        ctx.beginPath();
+        ctx.roundRect(x - barWidth / 2, barTop, barWidth, Math.max(barH, 2), 2);
+        ctx.fill();
+    });
+}
+
+function renderTrendsSummary(weightData, netCalData, target) {
+    const container = document.getElementById('trends-summary');
+    const validWeights = weightData.filter(v => v !== null);
+    const validCals = netCalData.filter(v => v !== null);
+
+    let weightChangeHTML = '<span class="trend-stat-value">--</span>';
+    if (validWeights.length >= 2) {
+        const change = validWeights[validWeights.length - 1] - validWeights[0];
+        const cls = change < -0.05 ? 'positive' : change > 0.05 ? 'negative' : '';
+        const sign = change > 0 ? '+' : '';
+        weightChangeHTML = `<span class="trend-stat-value ${cls}">${sign}${change.toFixed(1)}</span>`;
+    }
+
+    let avgCalHTML = '<span class="trend-stat-value">--</span>';
+    if (validCals.length > 0) {
+        const avg = Math.round(validCals.reduce((s, v) => s + v, 0) / validCals.length);
+        const cls = avg <= target ? 'positive' : 'negative';
+        avgCalHTML = `<span class="trend-stat-value ${cls}">${avg.toLocaleString()}</span>`;
+    }
+
+    let daysTracked = `<span class="trend-stat-value">${validCals.length}</span>`;
+
+    container.innerHTML = `
+        <div class="trend-stat">
+            ${weightChangeHTML}
+            <span class="trend-stat-label">Weight Change</span>
+        </div>
+        <div class="trend-stat">
+            ${avgCalHTML}
+            <span class="trend-stat-label">Avg Net Cal</span>
+        </div>
+        <div class="trend-stat">
+            ${daysTracked}
+            <span class="trend-stat-label">Days Tracked</span>
+        </div>
+    `;
 }
 
 // ============================================================
