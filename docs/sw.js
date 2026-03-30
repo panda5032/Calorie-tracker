@@ -1,4 +1,4 @@
-const CACHE_NAME = 'calorie-tracker-v12';
+const CACHE_NAME = 'calorie-tracker-v13';
 const ASSETS = [
     './',
     './index.html',
@@ -13,7 +13,7 @@ const ASSETS = [
     './icons/icon-512.png'
 ];
 
-// Install: cache all assets
+// Install: cache all assets, activate immediately
 self.addEventListener('install', event => {
     event.waitUntil(
         caches.open(CACHE_NAME)
@@ -22,7 +22,7 @@ self.addEventListener('install', event => {
     );
 });
 
-// Activate: clean old caches
+// Activate: clean old caches, take control immediately
 self.addEventListener('activate', event => {
     event.waitUntil(
         caches.keys().then(keys =>
@@ -34,11 +34,20 @@ self.addEventListener('activate', event => {
     );
 });
 
-// Fetch: serve from cache, fallback to network
+// Fetch: NETWORK-FIRST — always try to get latest, fall back to cache offline
 self.addEventListener('fetch', event => {
     event.respondWith(
-        caches.match(event.request)
-            .then(cached => cached || fetch(event.request))
-            .catch(() => caches.match('./index.html'))
+        fetch(event.request)
+            .then(response => {
+                // Got a fresh response — update the cache
+                const clone = response.clone();
+                caches.open(CACHE_NAME).then(cache => cache.put(event.request, clone));
+                return response;
+            })
+            .catch(() => {
+                // Network failed — serve from cache (offline support)
+                return caches.match(event.request)
+                    .then(cached => cached || caches.match('./index.html'));
+            })
     );
 });

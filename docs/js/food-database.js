@@ -827,21 +827,52 @@ const FoodDatabase = {
 
                 const br = (r + g + b) / 3;
                 const sat = Math.max(r, g, b) - Math.min(r, g, b);
+                const maxC = Math.max(r, g, b);
                 brightnessHist[Math.min(9, Math.floor(br / 25.6))]++;
 
                 // Classify each pixel into a color region
-                if (br < 40) regions.dark++;
+                // First: truly dark (near black) — very low brightness AND no color info
+                if (br < 25) regions.dark++;
+                // Bright white
                 else if (br > 220 && sat < 30) regions.white++;
-                else if (sat < 25 && br > 40 && br < 220) regions.gray++;
+                // Neutral gray (no color)
+                else if (sat < 20 && br > 25 && br < 220) regions.gray++;
+
+                // === DIM LIGHT COLOR DETECTION (br 25-100) ===
+                // Use relative channel dominance for dim pixels
+                else if (br < 100 && sat >= 15) {
+                    // Relative ratios matter more than absolute values in dim light
+                    const rRatio = r / maxC;
+                    const gRatio = g / maxC;
+                    const bRatio = b / maxC;
+                    if (r > g && r > b && rRatio > 0.6 && gRatio < 0.7 && bRatio < 0.6) {
+                        // Red/brown dominant in dim light
+                        if (g > b && g > r * 0.4) regions.brown++; // warm brown (meat)
+                        else regions.red++; // dark red
+                    } else if (g > r && g > b && gRatio > 0.5) {
+                        regions.green++; // dark green (peppers, veggies)
+                    } else if (r > b && g > b && r > 40 && g > 30) {
+                        regions.brown++; // warm dim pixel (likely food)
+                    } else if (b > r && b > g) {
+                        regions.dark++; // blue-dark, probably shadow
+                    } else {
+                        regions.dark++;
+                    }
+                }
+
+                // === NORMAL LIGHT COLOR DETECTION (br >= 100) ===
                 else if (r > 180 && g < 80 && b < 80) regions.red++;
+                else if (r > 150 && g < 100 && b < 80 && r > g * 1.5) regions.red++; // medium red
                 else if (r > 200 && g > 100 && g < 180 && b < 60) regions.orange++;
+                else if (r > 150 && g > 80 && g < 150 && b < 50 && r > g) regions.orange++; // dimmer orange
                 else if (r > 180 && g > 150 && b < 80) regions.yellow++;
-                else if (g > 100 && g > r + 20 && g > b + 20) regions.green++;
-                else if (r > 100 && g > 60 && g < r * 0.85 && b < r * 0.7 && br < 160) regions.brown++;
+                else if (r > 130 && g > 110 && b < 70 && r > b * 2) regions.yellow++; // dimmer yellow
+                else if (g > 80 && g > r + 15 && g > b + 15) regions.green++;
+                else if (r > 80 && g > 50 && g < r * 0.85 && b < r * 0.7 && br < 180) regions.brown++;
                 else if (r > 150 && b > 100 && g < Math.min(r, b)) regions.pink++;
                 else if (b > 100 && r > 80 && g < 80) regions.purple++;
-                else if (r > 150 && g > 120 && b > 90 && sat < 60) regions.beige++;
-                else if (br < 80) regions.dark++; // catch more darks
+                else if (r > 130 && g > 100 && b > 70 && sat < 60) regions.beige++;
+                else if (br < 80) regions.dark++;
             }
         }
 
